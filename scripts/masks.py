@@ -35,8 +35,10 @@ from project import load
 import rpc as R
 
 p = load(sys.argv[1])
+if p.reuse:
+    raise SystemExit(f'{p.name} reuses {p.reuse}: nothing to do here, run from dsm on')
 g = Grid(p)
-ref = p.run / 'ref'
+ref = p.vref
 info = {'views': {}}
 
 N = g.read(ref / f'geoid_{p.geoid}.tif')
@@ -168,7 +170,7 @@ for v in views:
     m[a == 0] = 3
     cv2.imwrite(str(p.prep / f'{v}_mask.png'), m)
     am = np.where(m > 0, 0, a).astype(np.uint8)
-    with rasterio.open(p.prep / f'{v}_m.tif', 'w', **{k: x for k, x in prof[v].items() if k not in ('nodata',)},
+    with rasterio.open(p.prep / f'{v}_m.tif', 'w', **{k: x for k, x in prof[v].items() if k not in ('nodata', 'transform', 'crs')},
                        nodata=0, rpcs=R.to_rasterio(rpcs[v])) as d:
         d.write(am, 1)
     q = cv2.cvtColor(a[::4, ::4], cv2.COLOR_GRAY2BGR).astype(np.float32)

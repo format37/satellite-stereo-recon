@@ -10,6 +10,8 @@ A cube model of a city is mostly hidden faces: of a column only the top and the 
 neighbours can be seen. The mesh has one quad per top and one per visible side of a column (as tall as the step),
 so a 2400 x 2200 model at 5 m is ~15M triangles instead of the 12 per cube of a voxel grid.
 """
+import warnings
+
 import numpy as np
 
 SOURCE_RGB = {0: (175, 175, 175), 1: (235, 150, 60), 2: (60, 120, 200), 3: (120, 120, 120)}
@@ -49,7 +51,8 @@ def rebin(c, t):
     z = c['z']; Hh, W = z.shape[0] // t * t, z.shape[1] // t * t
     b = lambda a: a[:Hh, :W].reshape(Hh // t, t, W // t, t, *a.shape[2:]).swapaxes(1, 2).reshape(Hh // t, W // t, t * t, *a.shape[2:])
     zb = b(z)
-    with np.errstate(all='ignore'):
+    with np.errstate(all='ignore'), warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)                # cells with no column at all
         zt = np.nanmax(zb, axis=2)
         rgb = np.nanmean(np.where(np.isfinite(zb)[..., None], b(c['rgb']).astype(np.float32), np.nan), axis=2)
     src = b(c['source']).min(axis=2)

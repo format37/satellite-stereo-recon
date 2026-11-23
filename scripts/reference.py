@@ -117,7 +117,9 @@ def gsi_layer(name, aoi, cache):
 if __name__ == '__main__':
     p = load(sys.argv[1])
     g = Grid(p)
-    out = p.run / 'ref'; out.mkdir(parents=True, exist_ok=True); cache = p.ref; cache.mkdir(parents=True, exist_ok=True)
+    if p.reuse:
+        raise SystemExit(f'{p.name} reuses {p.reuse}: nothing to do here, run from dsm on')
+    out = p.vref; out.mkdir(parents=True, exist_ok=True); cache = p.ref; cache.mkdir(parents=True, exist_ok=True)
     info = {'grid': dict(crs=str(g.crs), res=g.res, width=g.width, height=g.height, bounds=g.bounds)}
     print(f'grid {g.width} x {g.height} cells of {g.res} m in {g.crs}')
 

@@ -17,7 +17,7 @@ p = load(sys.argv[1])
 P = p.product
 J = lambda f: json.load(open(P / f)) if (P / f).exists() else {}
 views, masks, dsm, chk, vox = J('views.json'), J('masks.json'), J('dsm.json'), J('check.json'), J('voxels.json')
-ref = json.load(open(p.run / 'ref' / 'ref.json')) if (p.run / 'ref' / 'ref.json').exists() else {}
+ref = json.load(open(p.vref / 'ref.json')) if (p.vref / 'ref.json').exists() else {}
 
 
 def ba_stats(f):

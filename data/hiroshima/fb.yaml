@@ -36,7 +36,7 @@ dsm:
   res: 2.5                 # m, grid of the DSM (one PRISM pixel)
   geoid: gsigeo2011        # heights above sea level: GSI's Japanese geoid 2011 (T.P., the Tokyo Bay mean sea level that
                            # the GSI DEM uses); egm2008 = the global one. The ellipsoidal DSM is kept as well
-  fuse: median             # several pairs: per cell the median of the pairs' DSMs
+  fuse: median             # several pairs: one height per cell from the pairs' DSMs: median | mean | weighted (B/H)^2
   max_triangulation_error: 0      # m; 0 = ASP's default (keep every point)
   point2dem_options: []
 
@@ -49,3 +49,4 @@ voxels:
   size: 5                  # m, the cubes
   base: -5                 # m above sea level: the bottom of the model
   fill_m: 400              # holes in the DSM up to this size are filled from their rims and flagged (source 1); wider ones stay open
+  anchored: true           # build from product/dsm_anchored.tif (tied to the GSI DEM by check.py); false = the DSM as produced

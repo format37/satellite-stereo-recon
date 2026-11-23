@@ -5,8 +5,9 @@
 
 1. Each pair's DSM (stereo/<pair>/run-DEM.tif, heights above the WGS84 ellipsoid) onto the run's grid. Cells over
    water (product/water.tif) are dropped: stereo on water returns noise, and the water level is known anyway.
-2. More than one pair: per cell the median of the pairs that measured it (dsm.fuse: median | mean); the count is kept.
-   With two pairs the median is their mean.
+2. More than one pair: per cell one height from the pairs that measured it (dsm.fuse): median; mean; weighted = the
+   inverse-variance mean, weight (B/H)^2 (forward-backward 1, nadir pairs 0.25), after dropping a pair more than
+   5 m off the median of three. The count of pairs per cell is kept.
 3. Heights above sea level: H = h - N, N = the geoid model dsm.geoid above the ellipsoid. gsigeo2011 gives heights
    above T.P. (Tokyo Bay mean sea level, the Japanese datum, the one the GSI DEM and Japanese tide tables use);
    egm2008 the global geoid. Both N are kept in dsm.json; here they differ by 0.2 m.
@@ -20,6 +21,7 @@ sea level), dsm.json.
 """
 import json
 import sys
+import warnings
 from pathlib import Path
 
 import cv2
@@ -34,7 +36,12 @@ import rpc as R
 
 p = load(sys.argv[1])
 g = Grid(p)
-ref = p.run / 'ref'
+p.product.mkdir(parents=True, exist_ok=True)
+if p.reuse:                                          # the products of the earlier steps come with the reused variant
+    import shutil
+    for f in ('views.json', 'masks.json', 'water.tif'):
+        shutil.copy2(p.project / 'out' / p.reuse / 'product' / f, p.product / f)
+ref = p.vref
 water = g.read(p.product / 'water.tif')
 water = np.nan_to_num(water) > 0
 N = g.read(ref / f'geoid_{p.geoid}.tif')
@@ -60,8 +67,21 @@ for pr in p.pairs:
           f'{"" if same else " (resampled onto the grid)"}')
 S = np.stack(stack)
 cnt = np.isfinite(S).sum(0).astype(np.uint8)
-with np.errstate(all='ignore'):
-    h = np.nanmedian(S, axis=0) if p.fuse == 'median' else np.nanmean(S, axis=0)
+with np.errstate(all='ignore'), warnings.catch_warnings():
+    warnings.simplefilter('ignore', RuntimeWarning)
+    if p.fuse == 'weighted':
+        # inverse variance: a pair's height error goes with 1 / (B/H), so its weight with (B/H)^2. Where three pairs
+        # measured a cell, one that is more than 5 m off their median is dropped first.
+        vj = json.load(open(p.product / 'views.json'))['pairs']
+        w = np.array([vj[pair_name(pr)]['base_to_height'] ** 2 for pr in p.pairs], np.float32)[:, None, None]
+        med = np.nanmedian(S, axis=0)
+        keep = np.isfinite(S) & ~((np.abs(S - med) > 5) & (cnt >= 3))
+        h = np.sum(np.where(keep, S, 0) * w, axis=0) / np.sum(keep * w, axis=0)
+        info['weights'] = {pair_name(pr): float(x) for pr, x in zip(p.pairs, w.ravel())}
+    elif p.fuse == 'median':
+        h = np.nanmedian(S, axis=0)
+    else:
+        h = np.nanmean(S, axis=0)
 h = h.astype(np.float32)
 H = (h - N).astype(np.float32)
 g.write(p.product / 'dsm_ellipsoid.tif', h)

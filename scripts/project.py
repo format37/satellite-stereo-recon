@@ -11,7 +11,9 @@ variant of the run and writes into its own folder:
     data/<project>/out/<variant>/        prep/ ba/ stereo/ product/ logs/ summary.md
     data/<project>/out/ref/              downloads shared by the variants: GSI elevation tiles, land cover, geoid grids
 A YAML may start from another one: `base: fb.yaml` takes every key of fb.yaml and the YAML changes what it lists
-(sections are merged key by key). data/hiroshima/fb.yaml has every key commented.
+(sections are merged key by key). data/hiroshima/fb.yaml has every key commented. `stereo: {reuse: <variant>}`
+takes prep/, ref/, ba/ and stereo/ of that variant (same box and views): only dsm.py and the steps after it run,
+e.g. to try another fusion of the same pairs.
 """
 import sys
 from pathlib import Path
@@ -44,13 +46,14 @@ def load(path):
     g = lambda k: cfg.get(k) or {}
     masks, stereo, dsm, check, vox = (g(k) for k in ('masks', 'stereo', 'dsm', 'check', 'voxels'))
     pairs = [tuple(pr) for pr in cfg['pairs']]
+    src = proj / 'out' / stereo['reuse'] if stereo.get('reuse') else run      # stereo.reuse: another variant's prep, ref, ba, stereo
     views = list(dict.fromkeys(v for pr in pairs for v in pr))          # in order of first use: the first is the reference
     p = SimpleNamespace(
         yaml=path, project=proj, name=f'{proj.name}/{path.stem}', variant=path.stem, run=run, cfg=cfg,
         scenes={k: proj / v for k, v in cfg['scenes'].items()}, pairs=pairs, views=views,
         all_views=list(cfg['scenes']),
-        prep=run / 'prep', ba=run / 'ba', stereo=run / 'stereo', product=run / 'product', logs=run / 'logs',
-        ref=proj / 'out' / 'ref',
+        prep=src / 'prep', ba=src / 'ba', stereo=src / 'stereo', product=run / 'product', logs=run / 'logs',
+        ref=proj / 'out' / 'ref', vref=src / 'ref', reuse=stereo.get('reuse') or '',
         aoi=[float(x) for x in cfg['aoi']], crs=cfg.get('crs', 'EPSG:32653'),
         heights=[float(x) for x in cfg.get('heights', [-50, 1000])], crop_margin=int(cfg.get('crop_margin', 64)),
         # masks: water from a land-cover map, clouds from the views themselves

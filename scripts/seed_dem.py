@@ -26,7 +26,7 @@ if not seed.exists():
     raise SystemExit(f'{seed} not found: run that variant first')
 g = Grid(p)
 h = g.read(seed)
-N = g.read(p.run / 'ref' / f'geoid_{p.geoid}.tif')
+N = g.read(p.vref / f'geoid_{p.geoid}.tif')
 water = np.nan_to_num(g.read(p.product / 'water.tif')) > 0
 h[water] = N[water]
 idx = ndimage.distance_transform_edt(np.isnan(h), return_distances=False, return_indices=True)

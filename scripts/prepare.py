@@ -30,6 +30,8 @@ from project import load, pair_name
 import rpc as R
 
 p = load(sys.argv[1])
+if p.reuse:
+    raise SystemExit(f'{p.name} reuses {p.reuse}: nothing to do here, run from dsm on')
 views = list(dict.fromkeys(p.views + (p.cloud_views if p.clouds else [])))
 p.prep.mkdir(parents=True, exist_ok=True); p.product.mkdir(parents=True, exist_ok=True)
 lon0, lat0, lon1, lat1 = p.aoi

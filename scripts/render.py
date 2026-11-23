@@ -4,7 +4,8 @@
     python3 -I scripts/render.py data/hiroshima/fb.yaml
 
 Writes product/renders/:
-  dsm.png           the DSM above sea level: colour by height over a hillshade, water blue, holes grey
+  dsm.png           the DSM above sea level (the anchored one, product/dsm_anchored.tif, when check.py has made it):
+                    colour by height over a hillshade, water blue, holes grey
   dsm_city.png      the same at full resolution over the centre of the delta (3 x 3 km around the castle)
   ortho_city.png    the orthophoto of that square, to compare
   holes.png         what is measured and why the rest is not (water, cloud, no match)
@@ -33,7 +34,9 @@ from voxmesh import columns, mesh, rebin
 p = load(sys.argv[1])
 g = Grid(p)
 out = p.product / 'renders'; out.mkdir(parents=True, exist_ok=True)
-H = g.read(p.product / 'dsm.tif')
+anchored = (p.product / 'dsm_anchored.tif').exists()
+H = g.read(p.product / ('dsm_anchored.tif' if anchored else 'dsm.tif'))      # the maps show the anchored DSM when there is one
+LEVEL = 'anchored to the GSI DEM' if anchored else 'as produced (RPCs only)'
 holes = np.nan_to_num(g.read(p.product / 'holes.tif'), nan=255).astype(int)
 water = holes == 1
 ortho = g.read(p.product / 'ortho.tif')
@@ -68,7 +71,7 @@ rgb[water] = [0.55, 0.70, 0.88]
 rgb[(holes == 2)] = [0.85, 0.35, 0.85]
 rgb[(holes == 3)] = [0.6, 0.6, 0.6]
 ext = [x0 / 1e3, x1 / 1e3, y0 / 1e3, y1 / 1e3]
-save_map(rgb, ext, f'{p.name}: DSM, {g.res:g} m, heights above sea level ({p.geoid}); water blue, no match grey, cloud magenta',
+save_map(rgb, ext, f'{p.name}: DSM, {g.res:g} m, m above T.P., {LEVEL}; water blue, no match grey, cloud magenta',
          out / 'dsm.png', vmax)
 
 # ---- the centre of the delta at full resolution, with the orthophoto
@@ -80,7 +83,7 @@ rgb_c, _ = relief(H[sub], g.res, vmax=80)
 rgb_c[water[sub]] = [0.55, 0.70, 0.88]
 rgb_c[holes[sub] >= 2] = [0.6, 0.6, 0.6]
 ext_c = [(cx - 1500) / 1e3, (cx + 1500) / 1e3, (cy - 1500) / 1e3, (cy + 1500) / 1e3]
-save_map(rgb_c, ext_c, f'{p.name}: DSM over the centre of the delta (castle, Peace Park), 3 x 3 km, colour 0-80 m', out / 'dsm_city.png', 80)
+save_map(rgb_c, ext_c, f'{p.name}: DSM over the centre of the delta (castle, Peace Park), 3 x 3 km, {LEVEL}', out / 'dsm_city.png', 80)
 fig, ax = plt.subplots(figsize=(10, 10), dpi=120)
 ax.imshow(ortho[sub], cmap='gray', vmin=0, vmax=255, extent=ext_c); ax.set_title(f'{p.name}: orthophoto (nadir view on the DSM), same square', fontsize=10)
 fig.savefig(out / 'ortho_city.png', bbox_inches='tight'); plt.close(fig)
@@ -96,7 +99,7 @@ print('DSM pictures ->', out)
 # ---- where it fails: the largest disagreements of check.py, side by side with the orthophoto and the GSI DEM
 ck = json.load(open(p.product / 'check.json')) if (p.product / 'check.json').exists() else None
 if ck:
-    gsi = g.read(p.run / 'ref' / 'gsi.tif')
+    gsi = g.read(p.vref / 'gsi.tif')
     co = ck['coregistration']
     seen, picks = set(), []
     for h_ in ck['hotspots']:                                  # one per kind: tall buildings, ridges, valleys...
@@ -110,9 +113,9 @@ if ck:
         px, py = g.from_ll.transform(h_['lon'], h_['lat'])
         jc, ic = int((px - x0) / g.res), int((y1 - py) / g.res)
         sl = (slice(max(ic - half, 0), ic + half), slice(max(jc - half, 0), jc + half))
-        dsm_c = H[sl] - co['vertical_offset_m']
+        dsm_c = H[sl] if anchored else H[sl] - co['vertical_offset_m']
         lo_, hi_ = np.nanpercentile(np.r_[gsi[sl][np.isfinite(gsi[sl])], dsm_c[np.isfinite(dsm_c)]], [2, 98])
-        for c_, (a_, cm, t_) in enumerate(((ortho[sl], 'gray', 'orthophoto (nadir)'), (dsm_c, 'terrain', 'DSM, offset removed'),
+        for c_, (a_, cm, t_) in enumerate(((ortho[sl], 'gray', 'orthophoto (nadir)'), (dsm_c, 'terrain', 'DSM, anchored' if anchored else 'DSM, offset removed'),
                                            (gsi[sl], 'terrain', 'GSI DEM5A (laser, ground)'), (dsm_c - gsi[sl], 'RdBu_r', 'DSM - GSI'))):
             ax = axs[r_, c_] if len(picks) > 1 else axs[c_]
             kw = dict(vmin=0, vmax=255) if c_ == 0 else (dict(vmin=-20, vmax=20) if c_ == 3 else dict(vmin=lo_, vmax=hi_))

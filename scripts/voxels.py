@@ -4,7 +4,10 @@
     python3 -I scripts/voxels.py data/hiroshima/fb.yaml
     python3 scripts/voxview.py data/hiroshima/fb.yaml       # look at it (a window); render.py makes the pictures
 
-1. The DSM (heights above sea level, product/dsm.tif) in cells of voxels.size: the median of the measured 2.5 m cells.
+1. The DSM in cells of voxels.size: the median of the measured 2.5 m cells. The anchored DSM (check.py:
+   product/dsm_anchored.tif, tied to the GSI DEM by a shift and an offset) when it exists and voxels.anchored is not
+   false, else product/dsm.tif as produced; heights above sea level either way, but only the anchored one has the
+   right level (the RPCs alone leave it several metres off).
 2. Holes of the DSM on land no wider than voxels.fill_m are filled from their rims (source 1). Wider holes stay open:
    no column. A filled hole beside a tall building is most likely ground the slanted views could not see.
 3. A cell is a column from voxels.base up to its height, rounded to whole voxels: the top face of the column is the
@@ -36,11 +39,13 @@ s = p.voxel_size
 f = int(round(s / g.res))
 if abs(f * g.res - s) > 1e-6:
     raise SystemExit(f'voxels.size must be a multiple of dsm.res ({g.res} m)')
-H = g.read(p.product / 'dsm.tif')
+anchored = p.product / 'dsm_anchored.tif'
+src_dsm = anchored if anchored.exists() and p.cfg.get('voxels', {}).get('anchored', True) else p.product / 'dsm.tif'
+H = g.read(src_dsm)
 water = np.nan_to_num(g.read(p.product / 'water.tif')) > 0
 cnt = np.nan_to_num(g.read(p.product / 'dsm_count.tif'))
 ortho = g.read(p.product / 'ortho.tif')
-wc = np.nan_to_num(g.read(p.run / 'ref' / 'worldcover.tif')).astype(np.uint8)
+wc = np.nan_to_num(g.read(p.vref / 'worldcover.tif')).astype(np.uint8)
 hh, ww = g.height // f * f, g.width // f * f
 
 
@@ -114,7 +119,7 @@ origin = np.array([x0, y1 - rows * s, p.voxel_base])
 dims = np.array([cols, rows, int(K.max()) + 1])
 np.savez_compressed(p.product / 'voxels.npz', ijk=ijk, rgb=rgb, views=views, source=source, cover=cover, origin=origin, size=s,
                     dims=dims, unit='m', crs=str(g.crs))
-info = dict(size=s, base=p.voxel_base, columns=int(ok.sum()), voxels=int(len(ijk)), dims=dims.tolist(),
+info = dict(dsm=src_dsm.name, size=s, base=p.voxel_base, columns=int(ok.sum()), voxels=int(len(ijk)), dims=dims.tolist(),
             land_columns=int((ok & ~Wb).sum()), water_columns=int(Wb.sum()), filled_columns=int(fill.sum()),
             open_hole_cells=int((hole & ~fill).sum()), open_hole_share_of_land=float((hole & ~fill).sum() / max((~Wb).sum(), 1)),
             top_m=float(p.voxel_base + (K.max() + 1) * s))

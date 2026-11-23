@@ -1,0 +1,9 @@
+# hiroshima, variant "fnb_w": the three pairs of fnb (its stereo is reused, not run again), fused by inverse variance
+# instead of the median: forward-backward has twice the base of the nadir pairs, so its heights weigh four times as
+# much. Only the fusion differs from fnb.
+#   FROM=dsm scripts/run.sh data/hiroshima/fnb_w.yaml
+base: fnb.yaml
+stereo:
+  reuse: fnb
+dsm:
+  fuse: weighted

@@ -4,7 +4,8 @@
     python3 -I scripts/compare.py data/hiroshima/fb.yaml data/hiroshima/fnb.yaml
 
 The first YAML is the baseline. Writes data/<project>/out/compare.md and compare_<a>_<b>.png (the second DSM minus the
-first, land only). Both variants must share the grid (same aoi, crs, dsm.res).
+first, land only; the anchored DSMs when check.py has made them, so that the levels, which only ground control
+fixes, do not hide the shapes). Both variants must share the grid (same aoi, crs, dsm.res).
 """
 import json
 import sys
@@ -39,16 +40,17 @@ for v, pr, ml, nm, cl, fb, fa, co, bu, tr, cop, al in rows:
              f'{fa["rms"]:.2f} / {fa["nmad"]:.2f} / {fa["le95"]:.2f} | {bu["median"]:+.1f} | {tr["median"]:+.1f} | '
              f'{al["median"]:+.2f} / {al["rms"]:.2f} | {cop["rms"]:.2f} / {cop["nmad"]:.2f} |')
 water = np.nan_to_num(g.read(ps[0].product / 'water.tif')) > 0
-wc = np.nan_to_num(g.read(ps[0].run / 'ref' / 'worldcover.tif')).astype(int)
-H0 = g.read(ps[0].product / 'dsm.tif')
+wc = np.nan_to_num(g.read(ps[0].vref / 'worldcover.tif')).astype(int)
+pick = lambda p: p.product / ('dsm_anchored.tif' if (p.product / 'dsm_anchored.tif').exists() else 'dsm.tif')
+H0 = g.read(pick(ps[0]))
 for p in ps[1:]:
-    H1 = g.read(p.product / 'dsm.tif')
+    H1 = g.read(pick(p))
     d = H1 - H0
     land = ~water
     both = land & np.isfinite(d)
     filled = land & np.isnan(H0) & np.isfinite(H1)
     lost = land & np.isfinite(H0) & np.isnan(H1)
-    L += ['', f'## {p.variant} - {ps[0].variant} (DSMs above sea level)', '',
+    L += ['', f'## {p.variant} - {ps[0].variant} ({pick(p).stem} - {pick(ps[0]).stem}: the shapes, the levels taken out)', '',
           f'- where both measured ({both.mean() / land.mean():.1%} of the land): ' +
           (lambda s: f'median {s["median"]:+.2f}, RMS {s["rms"]:.2f}, NMAD {s["nmad"]:.2f}, 95% of |d| {s["le95"]:.2f} m')(stats(d[both])),
           f'- built-up: ' + (lambda s: f'median {s["median"]:+.2f}, NMAD {s["nmad"]:.2f} m')(stats(d[both & (wc == 50)])) +

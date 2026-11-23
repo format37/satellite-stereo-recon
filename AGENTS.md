@@ -25,6 +25,11 @@ mistakes:
   mixing the two breaks any flood logic by 33 m. Say which one a number is in. docs/datum.md has the tide levels.
 - **Bundle adjustment drifts without an anchor.** Unconstrained, it moved the camera centres by 25-53 m and the points
   of one view by 17 m. `run_stereo.sh` keeps one view fixed (`stereo.ba_fixed`, default N, else the first view).
+- **The RPCs alone do not give the level.** The three delivered RPCs of Hiroshima disagree along track by 1.4 px (N
+  against F) and 2.4 px (N against B): each pair alone is off by -2.8 m (F-B), +7.1 m (N-F), -12.2 m (N-B) on flat
+  ground. Two views cannot see this (it becomes height); three views can, and bundle adjustment makes the pairs agree,
+  but at the level of the fixed view (N: +6 m; F: -2.7 m). Only ground control sets the level: `check.py` writes
+  `product/dsm_anchored.tif` (tied to the GSI DEM) and `voxels.py` uses it. Report "as produced" and "anchored" apart.
 - **Clouds float.** A cloud is over different ground in every view; `masks.py` finds them so. A cloud in one view
   leaves a hole in that view's pairs only: another pair may fill it.
 
@@ -34,7 +39,8 @@ mistakes:
   scripts use `$VIRTUAL_ENV/bin/python` or `$PY` when set.
 - Long jobs run detached, log to a file, and are watched with `scripts/progress.sh`. A finished ASP step is not run
   again: delete `ba/` or `stereo/<pair>/` to redo it (after changing masks or stereo options, you must).
-- Never edit a shell script while it is running: bash reads it as it goes.
+- Never edit a shell script while it is running: bash reads it as it goes (it happened here: the run finished its
+  loop, then hit a syntax error in the new text). Write a new file and `mv` it over: the running bash keeps the old one.
 
 ## Verification
 
