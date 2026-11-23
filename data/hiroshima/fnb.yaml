@@ -1,0 +1,6 @@
+# hiroshima, variant "fnb": all three views. Three pairs, one DSM each, fused per cell (dsm.fuse): forward-backward
+# (B/H 1.0) and nadir-forward, nadir-backward (B/H 0.5 each, but the nadir view sees the ground between buildings
+# that one of the slanted views hides). Everything else as in fb.yaml.
+#   scripts/run.sh data/hiroshima/fnb.yaml 2>&1 | tee data/hiroshima/out/fnb.log
+base: fb.yaml
+pairs: [[F, B], [N, F], [N, B]]

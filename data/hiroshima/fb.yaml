@@ -1,0 +1,51 @@
+# hiroshima: ALOS PRISM tri-stereo over Hiroshima Bay, 23 Feb 2008 02:00 UTC (11:00 JST), path 81, one scene per
+# camera (forward, nadir, backward, 45 s apart), 2.5 m, 8-bit, level 1B2R + RPC as RESTEC ships it. docs/data.md has
+# where it comes from and its licence; the scenes never go into the repository.
+#   scripts/run.sh data/hiroshima/fb.yaml 2>&1 | tee data/hiroshima/out/fb.log
+# Variant "fb": the forward and backward views only, the widest baseline (B/H 1.0). Results: data/hiroshima/out/fb/
+
+scenes:                    # one folder per view, relative to this file: IMG-*.tif, RPC-*.txt, HDR-*.txt as delivered
+  F: scenes/GEOTIFF_RPC_PSM_Froward/GeoTIFF_RPC_PSM_F      # ("Froward" is how the archive spells it)
+  N: scenes/GEOTIFF_RPC_PSM_Nadir/GeoTIFF_RPC_PSM_N
+  B: scenes/GEOTIFF_RPC_PSM_Backward/GeoTIFF_RPC_PSM_B
+pairs: [[F, B]]            # stereo pairs, left image first. More than one pair: one DSM each, fused (dsm.fuse)
+
+aoi: [132.39, 34.325, 132.52, 34.42]   # lon0 lat0 lon1 lat1 (WGS84): the Ota river delta (the city), the port and some
+                                       # sea, the hills east (Futaba, Ushita, Ogon) and west (Koi) of it. 12.0 x 10.5 km
+crs: EPSG:32653            # every product is on one grid in WGS 84 / UTM zone 53N
+heights: [-20, 900]        # m above the ellipsoid that the crops must hold (the sea is at about +35 here, the hills < 800)
+crop_margin: 64            # pixels round the box in every crop
+
+masks:
+  water: worldcover        # ESA WorldCover 2021 (10 m), class 80: the sea and the tidal rivers. none = no water mask
+  water_shrink_m: 10       # water within this distance of land stays in the images: quays and sea walls are kept
+  clouds: true             # a cloud is bright in one view and not at the same ground spot in the others (it floats)
+  cloud_dn: auto           # brightness of a cloud, 8-bit; auto = the 99.5th percentile of the crop, at least 180
+  cloud_min_m2: 2000       # smaller bright blobs are not clouds
+  cloud_grow_m: 60         # the mask is grown by this much: thin edges, and the cloud's own shadow is not masked
+  cloud_views: [F, N, B]   # views compared for the cloud test (the nadir view helps even when it is not in a pair)
+
+stereo:                    # NASA Ames Stereo Pipeline (parallel_stereo -t rpc)
+  bundle_adjust: true      # adjust the RPCs of the views of this YAML to each other first (rotation + translation each)
+  algorithm: asp_mgm       # ASP's More Global Matching
+  subpixel: 9              # 9 = MGM's own (fast); 3 = affine adaptive, better and several times slower
+  options: []              # anything else for parallel_stereo, e.g. ["--corr-kernel", "7", "7"]
+  ba_options: []           # anything else for bundle_adjust
+
+dsm:
+  res: 2.5                 # m, grid of the DSM (one PRISM pixel)
+  geoid: gsigeo2011        # heights above sea level: GSI's Japanese geoid 2011 (T.P., the Tokyo Bay mean sea level that
+                           # the GSI DEM uses); egm2008 = the global one. The ellipsoidal DSM is kept as well
+  fuse: median             # several pairs: per cell the median of the pairs' DSMs
+  max_triangulation_error: 0      # m; 0 = ASP's default (keep every point)
+  point2dem_options: []
+
+check:                     # the DSM against independent elevation models
+  reference: [dem5a, dem5b, dem5c, dem10b]   # GSI elevation tiles, the first that has the cell: DEM5A (airborne laser,
+                                             # 5 m, bare ground), DEM5B/5C (photogrammetry, 5 m), DEM10B (10 m)
+  dsm_reference: copernicus                  # Copernicus GLO-30 (30 m, TanDEM-X, a surface model with roofs and trees)
+
+voxels:
+  size: 5                  # m, the cubes
+  base: -5                 # m above sea level: the bottom of the model
+  fill_m: 400              # holes in the DSM up to this size are filled from their rims and flagged (source 1); wider ones stay open

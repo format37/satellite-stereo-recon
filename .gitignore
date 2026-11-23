@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+# data: keep only the project YAML files and the short summaries. The satellite scenes have their own licence
+# (docs/data.md): they, the crops and every raster made from them stay on the machine that processed them.
+data/*/*
+!data/*/*.yaml
+!data/*/summary.md
+# rasters never belong in the repository, wherever they are written
+*.tif
+*.tiff
+*.TIF
+*.jp2
+*.vrt
+*.npz
+*.ply
+# overnight reports (with pictures of the products), logs
+reports/
+logs/

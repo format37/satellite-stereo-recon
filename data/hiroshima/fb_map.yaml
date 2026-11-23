@@ -1,0 +1,7 @@
+# hiroshima, variant "fb_map": as fb (forward + backward), but both views are first mapprojected onto a smooth
+# (40 m) version of fb's own DSM, and stereo runs on those (ASP's advice for steep terrain). The seed comes from the
+# same scenes: no outside elevation data goes into the result. Does it help the hills, where fb fails?
+#   scripts/run.sh data/hiroshima/fb.yaml && scripts/run.sh data/hiroshima/fb_map.yaml
+base: fb.yaml
+stereo:
+  mapproject: fb

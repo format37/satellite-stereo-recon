@@ -1,0 +1,9 @@
+numpy
+scipy
+pyyaml
+opencv-python-headless
+rasterio        # 1.4.4 was used (GDAL 3.10 in the wheel): reads the scenes, writes the RPC into the crops, reads remote COGs
+pyproj          # 3.7.2 was used
+matplotlib
+open3d==0.19.0  # renders (offscreen, EGL) and the viewer; 0.20 needs a newer libstdc++ than Anaconda's Python has
+# not from pip: the NASA Ames Stereo Pipeline (3.7.0 was used), on PATH after this Python. See README.

@@ -1,0 +1,6 @@
+# hiroshima, variant "fb_s3": as fb (forward + backward), with ASP's affine adaptive subpixel refinement (mode 3)
+# instead of MGM's own (mode 9). Slower; does it lower the noise on flat ground?
+#   scripts/run.sh data/hiroshima/fb_s3.yaml
+base: fb.yaml
+stereo:
+  subpixel: 3
