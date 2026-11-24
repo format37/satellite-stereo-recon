@@ -36,7 +36,9 @@ What the files say about themselves (`HDR-*.txt`, `summary.txt`, `README.txt`):
   value-added products (a DSM no longer has the original pixel structure) carry `INCLUDES MATERIAL (c)JAXA 2008`, and
   selling or transferring them needs a "Category B" purchase. Read the licence itself before publishing anything made
   from these scenes.
-- **Where it was downloaded from**: not recorded in the archives (dated 2018-02-07). Add the source here if known.
+- **Where it was downloaded from**: Apollo Mapping, <https://apollomapping.com/download-poster-thank-you> (the
+  archives are dated 2018-02-07). That page refuses automated requests, so whatever it says about the terms of the
+  download was not read here; the licence inside the archives is the one above.
 
 How to use them: unpack the three archives anywhere, and point `data/<project>/scenes` at the folder (a link is fine):
 
