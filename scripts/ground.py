@@ -18,6 +18,13 @@ A stereo DSM sees roofs and treetops; at 2.5 m it sees few of the streets betwee
    the built-up land by normalized convolution (a Gaussian of ground.interp_sigma_m). It is used where the land
    within ground.built_up_window_m is mostly built-up (ground.built_up_min) and flat (ground.flat_max_deg), blended
    in over a short range; hills keep the opening (they are forest, or slope).
+3. The opening cuts every hill narrower than its window and the top off the wider ones (Hiroshima, by the GSI laser
+   DEM: the two wooded hills of Eba, 50 and 33 m, came out at 2 m; Ogonzan, 209 m, at 134 m). Hills are where people
+   run to, so on wooded hills the DSM itself is the ground: over forest the stereo DSM is close to the ground (in
+   Hiroshima within ~1 m of the laser DEM in the median: a winter scene, the canopy smoothed by the matching;
+   ground.canopy_m is taken off where the canopy shows more). A wooded patch is a hill when it rises more than
+   ground.hill_relief_m above the ground round it: more than a stand of trees on flat land does (the garden of
+   Shukkeien: 11 m), which keeps the opening.
 The ground is never above the DSM. Computed at ground.res (10 m), back on the DSM grid by bilinear interpolation.
 The settings were chosen on Hiroshima against the GSI laser DEM (floods.py, a few were tried): on flat built-up land
 the ground model is +0.3 m off GSI in the median (the opening alone: +1.2 m), and the downtown is no longer a hill.
@@ -79,9 +86,11 @@ op = np.where((op <= -BIG / 2) | w10, np.nan, op)
 G = up(op)
 info = dict(window_m=p.ground_window_m, res_m=res, percentiles=[lo_p, hi_p])
 
+# the DSM in medians of the coarse cells (steps 2 and 3)
+hmed = down(np.where(water, np.nan, H), np.nanmedian)
+
 # 2. under dense built-up land: the ground seen nearby, spread by normalized convolution
 if p.ground_interp_sigma_m > 0:
-    hmed = down(np.where(water, np.nan, H), np.nanmedian)
     obs = down(np.isin(wc, [20, 30, 40, 60, 90]).astype(np.float32)) > 0.75
     obs = ndimage.binary_erosion(obs, iterations=1) & np.isfinite(hmed) & ~w10 & (hmed < low + 2.0)
     s = p.ground_interp_sigma_m / res
@@ -104,6 +113,30 @@ if p.ground_interp_sigma_m > 0:
     info.update(interp_sigma_m=p.ground_interp_sigma_m, built_up_window_m=p.ground_built_up_window_m,
                 built_up_min=p.ground_built_up_min, flat_max_deg=p.ground_flat_max_deg,
                 observations_share=float(obs.mean()), interpolated_share_of_land=float((W[~water] > 0.5).mean()))
+
+# 3. wooded hills: the DSM is their ground. A wooded patch (WorldCover tree cover, 8-connected) is a hill when the top
+# of it (the 95th percentile of the DSM) stands more than hill_relief_m above the ground round it (the median of the
+# ground so far in a ring of 20 m outside it; a patch with no land round it, an island: its own 5th percentile)
+if p.ground_hill_relief_m > 0:
+    tree = (down((wc == 10).astype(np.float32)) > 0.5) & ~w10 & np.isfinite(hmed)
+    lab, n = ndimage.label(tree, structure=np.ones((3, 3)))
+    hills = 0
+    if n:
+        idx = np.arange(1, n + 1)
+        g10 = down(G)
+        dout, (ii, jj) = ndimage.distance_transform_edt(~tree, return_indices=True)
+        ring = ~tree & ~w10 & ~hole10 & (dout * res <= 20) & np.isfinite(g10)
+        rl = np.where(ring, lab[ii, jj], 0)
+        base = np.asarray(ndimage.median(g10, rl, idx), dtype=float)
+        base[np.bincount(rl.ravel(), minlength=n + 1)[1:] == 0] = np.nan   # (ndimage gives a number for an empty label)
+        top = ndimage.labeled_comprehension(hmed, lab, idx, lambda v: np.percentile(v, 95), float, np.nan)
+        bottom = ndimage.labeled_comprehension(hmed, lab, idx, lambda v: np.percentile(v, 5), float, np.nan)
+        hill = np.r_[False, top - np.where(np.isfinite(base), base, bottom) > p.ground_hill_relief_m][lab]
+        hills = int(np.unique(lab[hill]).size)
+        on = up(hill.astype(np.float32)) > 0.5
+        G = np.where(on, np.fmax(G, up(np.where(hill, hmed - p.ground_canopy_m, np.nan))), G)
+        info.update(hill_relief_m=p.ground_hill_relief_m, canopy_m=p.ground_canopy_m, wooded_hills=hills,
+                    wooded_hills_share_of_land=float(on[~water].mean()))
 G = np.where(np.isfinite(H), np.minimum(G, H), G).astype(np.float32)
 G[water] = np.nan
 g.write(p.product / 'ground.tif', G)
@@ -114,4 +147,5 @@ json.dump(info, open(p.product / 'ground.json', 'w'), indent=1)
 print(f'ground: opening of {p.ground_window_m:g} m (percentiles {lo_p:g}/{hi_p:g})' +
       (f'; under flat built-up land ({info["interpolated_share_of_land"]:.0%} of the land) the open ground seen nearby, '
        f'sigma {p.ground_interp_sigma_m:g} m' if p.ground_interp_sigma_m > 0 else '') +
+      (f'; {info["wooded_hills"]} wooded hills ({info["wooded_hills_share_of_land"]:.0%} of the land) keep the DSM' if 'wooded_hills' in info else '') +
       f'; the DSM stands {info["dsm_minus_ground_median_m"]:.1f} m above it in the median, more than 3 m on {info["land_more_than_3m_above_ground"]:.0%} of the land')

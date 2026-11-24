@@ -9,8 +9,9 @@ and canopy), the ground model of ground.py, and the DSM at the level the RPCs al
 - the sea at a level (floods.levels, m above today's mean sea level, demo.msl_m above the geoid): land reached from
   the sea through cells lower than the level (a bathtub: water that stays, no waves), km² and overlap with GSI's;
 - high ground: land at least floods.high_ground_m above mean sea level, in pieces of at least demo.refuge_min_ha.
-  For every cell of land below the map level by GSI, the distance to the nearest piece in each model, and whether
-  the piece a model points to is really high (within 50 m of GSI's high ground) or a roof.
+  For every cell of land below the map level by GSI, the running time to the nearest piece, as the demo finds it
+  (demo.speed_kmh on the flat, Tobler's slope factor, 8 neighbours, round the water), on each model and on GSI;
+  whether the piece a model's route ends on is really high (within 50 m of GSI's high ground) or a roof.
 Writes product/floods.json, floods.md and floods_map.png (the sea at floods.map_level, high ground, wrong high ground).
 """
 import json
@@ -23,6 +24,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import numpy as np
 from scipy import ndimage
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from geo import Grid
@@ -92,6 +95,25 @@ def high_ground(H, R):
     return (size >= A_MIN)[lab]
 
 
+def run_times(H, targets):
+    """seconds to the nearest target cell, running as in the demo: demo.speed_kmh on the flat, Tobler's slope factor,
+    8 neighbours, over land; and the target cell each cell runs to. One search backwards from all the targets."""
+    walk = ~sea & ~inland & np.isfinite(H)
+    Hn, ids = np.nan_to_num(H), np.arange(rows * cols).reshape(rows, cols)
+    v0, flat = float(p.demo.get('speed_kmh', 8)) / 3.6, np.exp(-3.5 * 0.05)
+    r_, c_, d_ = [], [], []
+    for dr, dc in ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)):
+        a = (slice(max(0, -dr), rows - max(0, dr)), slice(max(0, -dc), cols - max(0, dc)))   # from here
+        b = (slice(max(0, dr), rows - max(0, -dr)), slice(max(0, dc), cols - max(0, -dc)))   # to the neighbour
+        ok = walk[a] & walk[b]
+        step = cell * (np.sqrt(2) if dr and dc else 1.0)
+        v = v0 * np.exp(-3.5 * np.abs((Hn[b] - Hn[a]) / step + 0.05)) / flat
+        r_.append(ids[b][ok]); c_.append(ids[a][ok]); d_.append(step / v[ok])   # backwards: b -> a costs the run a -> b
+    A = csr_matrix((np.concatenate(d_), (np.concatenate(r_), np.concatenate(c_))), shape=(rows * cols,) * 2)
+    t, _, src = dijkstra(A, indices=np.flatnonzero(targets & walk), min_only=True, limit=3600, return_predecessors=True)
+    return t.reshape(rows, cols), src.reshape(rows, cols)
+
+
 res = dict(cell_m=cell, msl_above_geoid_m=msl, geoid=p.geoid, anchor=anchor['reference'], land_km2=float(land.sum() * km2),
            flood={}, high_ground={})
 for L in levels:
@@ -102,25 +124,26 @@ for L in levels:
         both = (fM & fG).sum()
         row[name] = dict(km2=float(fM.sum() * km2), iou=float(both / max((fM | fG).sum(), 1)), of_gsi=float(both / max(fG.sum(), 1)))
     res['flood'][f'{L:g}'] = row
-people = land & (G < LM)
 rG = high_ground(G, RH)
 dG = ndimage.distance_transform_edt(~rG) * cell
+tG, _ = run_times(G, rG)
+people = land & (G < LM) & np.isfinite(tG)                   # low land from which GSI's high ground is within the hour
 res['people_km2'] = float(people.sum() * km2)
 maps = {}
 for name, H in models.items():
     if name == REF:
-        res['high_ground'][name] = dict(km2=float(rG.sum() * km2), median_m=float(np.median(dG[people])), p90_m=float(np.percentile(dG[people], 90)))
+        res['high_ground'][name] = dict(km2=float(rG.sum() * km2), minutes_median=float(np.median(tG[people]) / 60),
+                                        minutes_p90=float(np.percentile(tG[people], 90) / 60))
         maps[name] = rG
         continue
     rM = high_ground(H, RH)
-    dM, (ii, jj) = ndimage.distance_transform_edt(~rM, return_indices=True)
-    dM = dM * cell
-    real = dG[ii, jj] <= 50
-    dd = np.abs(dM - dG)[people]
+    tM, src = run_times(H, rM)
+    a, b, s_ = tM[people], tG[people], src[people]
+    real = np.zeros(a.size, bool); real[s_ >= 0] = dG.ravel()[s_[s_ >= 0]] <= 50
     res['high_ground'][name] = dict(km2=float(rM.sum() * km2), wrong_km2=float((rM & (dG > 50)).sum() * km2),
-                                    median_m=float(np.median(dM[people])), off_median_m=float(np.median(dd)),
-                                    within_100m=float(np.mean(dd <= 100)), within_250m=float(np.mean(dd <= 250)),
-                                    sent_to_real=float(np.mean(real[people])))
+                                    minutes_median=float(np.median(np.where(np.isfinite(a), a, 1e9)) / 60),
+                                    within_2min=float(np.mean(np.abs(a - b) <= 120)), longer_5min=float(np.mean(a - b > 300)),
+                                    none=float(np.mean(~np.isfinite(a))), route_to_real=float(np.mean(real)))
     maps[name] = rM
 # the whole curve: land the sea reaches by level, for the reference and the ground model (demo.py puts the reference's
 # beside the model's number in the demo)
@@ -136,15 +159,17 @@ L_ = [f'# {p.name}: where the sea goes, and the nearest high ground', '',
       '## Land the sea reaches (km², overlap with GSI as IoU)', '', '| level | ' + ' | '.join(names) + ' |', '|---' * (len(names) + 1) + '|']
 for L, row in res['flood'].items():
     L_.append(f'| {L} m | ' + ' | '.join(f'{v["km2"]:.1f}' + ('' if k == names[0] else f' ({v["iou"]:.2f})') for k, v in row.items()) + ' |')
-L_ += ['', f'## High ground: at least {RH:g} m, pieces of {A_MIN * cell ** 2 / 1e4:g} ha or more; from the {res["people_km2"]:.1f} km² of land '
-       f'below {LM:g} m (GSI)', '', '| model | km² | wrong (not high in GSI) | median distance | off GSI\'s, median | within 100 m | within 250 m | sends to real high ground |',
-       '|---|---|---|---|---|---|---|---|']
+L_ += ['', f'## High ground: at least {RH:g} m, pieces of {A_MIN * cell ** 2 / 1e4:g} ha or more; running to it from the {res["people_km2"]:.1f} km² '
+       f'of land below {LM:g} m (GSI)', '', f'Running as in the demo: {float(p.demo.get("speed_kmh", 8)):g} km/h on the flat, slower uphill (Tobler), '
+       'round the water, to the nearest piece by time.', '',
+       '| model | km² | wrong (not high in GSI) | running time, median | within 2 min of GSI\'s | 5 min longer or more | the route ends on real high ground |',
+       '|---|---|---|---|---|---|---|']
 for k, v in res['high_ground'].items():
     if k == names[0]:
-        L_.append(f'| {k} | {v["km2"]:.1f} | | {v["median_m"]:.0f} m (90%: {v["p90_m"]:.0f} m) | | | | |')
+        L_.append(f'| {k} | {v["km2"]:.1f} | | {v["minutes_median"]:.1f} min (90%: {v["minutes_p90"]:.1f}) | | | |')
     else:
-        L_.append(f'| {k} | {v["km2"]:.1f} | {v["wrong_km2"]:.1f} | {v["median_m"]:.0f} m | {v["off_median_m"]:.0f} m | {v["within_100m"]:.0%} | '
-                  f'{v["within_250m"]:.0%} | {v["sent_to_real"]:.0%} |')
+        L_.append(f'| {k} | {v["km2"]:.1f} | {v["wrong_km2"]:.1f} | {v["minutes_median"]:.1f} min | {v["within_2min"]:.0%} | '
+                  f'{v["longer_5min"]:.0%} | {v["route_to_real"]:.0%} |')
 open(p.product / 'floods.md', 'w').write('\n'.join(L_) + '\n')
 print('\n'.join(L_))
 
@@ -169,8 +194,8 @@ for ax, name in zip(axs, names[:3]):
         sp.set_color('#d9d8d3')
     fk = res['flood'][f'{LM:g}'][name]['km2'] if f'{LM:g}' in res['flood'] else flooded(H, LM).sum() * km2
     hg = res['high_ground'][name]
-    sub = (f'sea reaches {fk:.1f} km² · nearest high ground: median {hg["median_m"]:.0f} m' if name == names[0] else
-           f'sea reaches {fk:.1f} km² · sends {hg["sent_to_real"]:.0%} of the low city to real high ground')
+    sub = (f'sea reaches {fk:.1f} km² · high ground: a {hg["minutes_median"]:.1f} min run in the median' if name == names[0] else
+           f'sea reaches {fk:.1f} km² · {hg["within_2min"]:.0%} of the low city run within 2 min of GSI\'s time')
     ax.set_title(name, fontsize=13, color='#0b0b0b', loc='left', pad=22)
     ax.text(0, 1.012, sub, transform=ax.transAxes, fontsize=10.5, color='#52514e', va='bottom')
 fig.legend(handles=[Patch(color=SEA, label='sea, rivers, ponds (WorldCover)'),

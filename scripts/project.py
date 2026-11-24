@@ -80,6 +80,7 @@ def load(path):
         ground_percentiles=[float(x) for x in ground.get('percentiles', [10, 90])],
         ground_interp_sigma_m=float(ground.get('interp_sigma_m', 300)), ground_built_up_window_m=float(ground.get('built_up_window_m', 620)),
         ground_built_up_min=float(ground.get('built_up_min', 0.5)), ground_flat_max_deg=float(ground.get('flat_max_deg', 5)),
+        ground_hill_relief_m=float(ground.get('hill_relief_m', 15)), ground_canopy_m=float(ground.get('canopy_m', 0)),
         # check against an independent elevation model (GSI layers: Japan only; empty = no check)
         reference=list(check.get('reference', [])),
         dsm_reference=check.get('dsm_reference', 'copernicus'),

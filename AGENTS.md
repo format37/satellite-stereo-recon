@@ -34,9 +34,14 @@ mistakes:
   produced" and "anchored" apart, and say which reference anchored it: anchored to Copernicus, Hiroshima's level is
   0.76 m below the GSI laser DEM; anchored to GSI, the check against GSI is not independent.
 - **A DSM is not the ground.** Roofs and canopy stand in it. `ground.py` makes a ground model from the DSM itself
-  (a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution). Floods
-  and high ground use it, never the DSM. Sea walls and river embankments are narrower than the pixels: below about
-  5 m (the 95% error) a bathtub on it floods land that the walls protect; `floods.py` shows by how much.
+  (a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution; on
+  wooded hills the DSM itself). Floods and high ground use it, never the DSM. Sea walls and river embankments are
+  narrower than the pixels: below about 5 m (the 95% error) a bathtub on it floods land that the walls protect;
+  `floods.py` shows by how much.
+- **Removing buildings must not remove hills.** A flat-window opening wider than the buildings also cuts every hill
+  narrower than the window (Eba's 50 m hill came out at 2 m, and the demo sent people past it). Judge a ground model
+  by the demo's own question, the running time to high ground against GSI's (`floods.py`), not by the flood area or
+  by whether the high ground it points to is real: both looked fine while the hills were missing.
 - **Clouds float.** A cloud is over different ground in every view; `masks.py` finds them so. A cloud in one view
   leaves a hole in that view's pairs only: another pair may fill it.
 

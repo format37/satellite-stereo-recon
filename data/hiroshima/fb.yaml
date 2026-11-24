@@ -54,6 +54,9 @@ ground:                    # the ground under roofs and canopy, from the DSM its
   built_up_window_m: 620   # ... where the land within this window is mostly built-up
   built_up_min: 0.5        # (this share of WorldCover built-up)
   flat_max_deg: 5          # ... and flat (hills keep the opening)
+  hill_relief_m: 15        # a wooded patch rising more than this above the ground round it is a hill: the DSM is
+                           # its ground (the opening would cut it); 0 = off
+  canopy_m: 0              # taken off the DSM on wooded hills (0 here: over forest the DSM is within ~1 m of GSI's)
 
 check:                     # the DSM against independent elevation models
   reference: [dem5a, dem5b, dem5c, dem10b]   # GSI elevation tiles, the first that has the cell: DEM5A (airborne laser,

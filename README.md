@@ -76,9 +76,9 @@ Each takes the same YAML and can be run on its own.
 | bundle adjustment (one view fixed), stereo per pair, a DSM per pair (ASP); optionally on views mapprojected onto another variant's smoothed DSM | `run_stereo.sh` (`seed_dem.py`) | `ba/`, `stereo/<pair>/run-DEM.tif` |
 | pairs fused, heights above sea level, holes explained, orthophoto | `dsm.py` | `product/dsm.tif`, `dsm_ellipsoid.tif`, `holes.tif`, `ortho.tif` |
 | the level and position from a reference height model (`anchor.reference`: copernicus, gsi, none), Nuth & Kaab | `anchor.py` (`coreg.py`) | `product/dsm_anchored.tif`, `anchor.json` |
-| the ground under roofs and canopy: a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution | `ground.py` | `product/ground.tif`, `ground.json` |
+| the ground under roofs and canopy: a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution; on wooded hills, the DSM itself | `ground.py` | `product/ground.tif`, `ground.json` |
 | against the GSI DEM (by land cover, slope, curvature, distance to water, pair; co-registration; the anchored DSM; low-lying land) and Copernicus (Japan only: needs `check.reference`) | `check.py` | `product/check.md`, `check.json`, `check_dh.png` |
-| the demo's two questions against the GSI DEM: where the sea goes by level (a bathtub), the nearest high ground | `floods.py` | `product/floods.md`, `floods.json`, `floods_map.png` |
+| the demo's two questions against the GSI DEM: where the sea goes by level (a bathtub), the running time to the nearest high ground | `floods.py` | `product/floods.md`, `floods.json`, `floods_map.png` |
 | columns of cubes from the anchored DSM, the sea at 0 m | `voxels.py` (look: `voxview.py`) | `product/voxels.npz` |
 | the demo's data: surface and ground in 5 m cells and 0.5 m steps, colours, georeference, accuracy, the reference's flood curve | `demo.py` | `product/demo/` (copied where asked) |
 | pictures (headless), every number on one page | `render.py`, `summary.py` | `product/renders/`, `summary.md` |
@@ -104,17 +104,18 @@ the DSM, not its level.
 | `fnb_global` | as fnb_w, only global inputs; anchored to Copernicus GLO-30, not GSI | 99.2% | +6.45 / 7.04 / 1.46 m | 3.02 / 1.46 / 5.15 m, level -0.76 m | +8.59 / 11.36 m |
 
 The demo's questions (`fnb_global`, `floods.md`; 5 m cells, levels above today's mean sea level, a bathtub from the
-sea; the GSI laser DEM as the reference; its ground model sends 99% of the people on land below 3.44 m to real
-ground of 10 m or more, the nearest piece 48 m off GSI's in the median):
+sea; the GSI laser DEM as the reference). High ground of 10 m or more, run to from the land below 3.44 m as the demo
+does it (8 km/h on the flat, slower uphill): on the ground model a 6.7 min run in the median (GSI: 6.4), within 2 min
+of GSI's time for 94% of the people and never 5 min longer, the route ending on real high ground for 99%:
 
 | sea level | GSI DEM (ground) | DSM, anchored (roofs) | ground model (IoU with GSI) |
 |---|---|---|---|
-| 1 m | 0.2 km² | 2.0 km² | 18.8 km² (0.00) |
-| 2 m | 10.1 km² | 8.2 km² | 35.2 km² (0.24) |
-| 3.44 m (Nankai Trough tsunami, Hiroshima City's maximum) | 42.1 km² | 21.6 km² | 48.9 km² (0.80) |
-| 5 m | 49.4 km² | 32.7 km² | 52.2 km² (0.90) |
-| 10 m | 54.2 km² | 48.0 km² | 56.7 km² (0.94) |
-| 20 m | 57.8 km² | 56.0 km² | 60.0 km² (0.95) |
+| 1 m | 0.2 km² | 2.0 km² | 18.7 km² (0.00) |
+| 2 m | 10.1 km² | 8.2 km² | 34.9 km² (0.25) |
+| 3.44 m (Nankai Trough tsunami, Hiroshima City's maximum) | 42.1 km² | 21.6 km² | 48.6 km² (0.81) |
+| 5 m | 49.4 km² | 32.7 km² | 51.8 km² (0.91) |
+| 10 m | 54.2 km² | 48.0 km² | 56.2 km² (0.94) |
+| 20 m | 57.8 km² | 56.0 km² | 59.3 km² (0.95) |
 
 What the runs showed:
 
@@ -125,7 +126,8 @@ What the runs showed:
 | What does the nadir view add? | Completeness: 89.4% -> 99.2% of the land, the cloud hole of the forward view filled, the ground behind tall buildings. Not precision: the nadir pairs have half the base (NMAD 2.3-2.6 m alone); weighted fusion keeps the F-B precision. |
 | Where does it fail? | Forested hills: NMAD 1.7 m on slopes under 5 deg, 4.0 at 5-15, 7.0 at 15-30, 8.5 above 30. Not the sun (all aspects alike) but the shape: ridges come out 5 m low, valleys 14 m high (canopy and MGM smoothing); a narrow ridge (Motoujina) 30 m low. |
 | Can it run without Japanese data? | Yes: `fnb_global` uses only global inputs. Anchored to Copernicus GLO-30, its level is 0.76 m below the GSI laser DEM on flat open ground; the spread is the same (NMAD 1.46 m, 95% within 5.2 m). The images give the shape, one outside model gives the level. |
-| And the ground under the roofs? | `ground.py`: on flat built-up land +0.3 m off GSI in the median (anchored to GSI). From 5 m up the flood matches GSI's with IoU 0.90-0.95; at 3.44 m 0.80. Below about 3 m it floods far more than GSI (1 m: 19 km² against 0.2): sea walls and river embankments are narrower than 2.5 m pixels, and the level is 0.76 m low. The demo shows GSI's number beside its own. |
+| And the ground under the roofs? | `ground.py`: on flat built-up land +0.3 m off GSI in the median (anchored to GSI). From 5 m up the flood matches GSI's with IoU 0.91-0.95; at 3.44 m 0.81. Below about 3 m it floods far more than GSI (1 m: 19 km² against 0.2): sea walls and river embankments are narrower than 2.5 m pixels, and the level is 0.76 m low. The demo shows GSI's number beside its own. |
+| And the hills? | The opening that takes the roofs off took the hills too: every hill narrower than its 210 m window and the top of the wider ones (the wooded hills of Eba, 50 and 33 m by GSI, came out at 2 m; Ogonzan, 209 m, at 134 m), so the demo sent people past a hill next to them. Over forest the stereo DSM is within ~1 m of GSI in the median (a winter scene; the matching smooths the canopy), so on wooded hills (patches rising more than 15 m above the ground round them; a garden's trees on flat land rise 11 m) the DSM is the ground: Eba 48 and 32 m, Ogonzan 207 m. Running to high ground of 10 m from the land below 3.44 m, the share of people within 2 min of GSI's time went from 76% to 94%, 5 min longer or more from 14% to 0%. |
 | Is it a ground model? | No: roofs and canopy. GSI has 10.7 km² of the box's land below 1 m T.P. and 21 km² below 2 m (spring high water is +1.9 m: the inner delta lies behind sea walls); the anchored DSM has 1.9 and 5.6 km² there (IoU 0.09 and 0.18). |
 | And as a surface model? | Against Copernicus GLO-30 (TanDEM-X, 30 m), anchored: built-up median +1.05 m, RMS 3.5; open +0.58 m, RMS 2.9; trees -4.3 m, RMS 10.6. |
 | Do the usual quality settings help? | No. ASP's subpixel mode 3 instead of MGM's own: NMAD 1.77 m on flat ground instead of 1.41, worse slopes, 3x the time. Stereo on views mapprojected onto fb's own smoothed DSM: 4% more land, but NMAD 1.49 m and slopes worse (7.9 m at 15-30 deg): MGM leans on the smooth seed where the forest has little texture. |
