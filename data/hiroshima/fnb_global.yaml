@@ -17,6 +17,7 @@ floods:                    # floods.py: flood extents and high ground of the mod
   levels: [1, 2, 3.44, 5, 10, 20, 50]   # m above today's mean sea level (demo.msl_m above the geoid)
   high_ground_m: 10        # high ground for the test: at least this high, in pieces of demo.refuge_min_ha
   map_level: 3.44          # the level of the map
+  figure_levels: [1.76, 3.44]   # the two maps of figures.py: a level where the model fails, one where it holds
 
 demo:                      # demo.py: the data of the interactive demo (the post on latentstate.dev)
   name: Hiroshima
@@ -26,6 +27,31 @@ demo:                      # demo.py: the data of the interactive demo (the post
   margin_m: 5              # safe ground = water + this: the 95% error of the DSM on flat open ground (check.md)
   speed_kmh: 8             # running, not an athlete, on the flat; slower uphill (Tobler)
   refuge_min_ha: 1         # high ground counts in pieces at least this big
-  marks:                   # local levels for the slider, m above today's mean sea level (docs/datum.md)
-    - {level: 1.76, label: spring high tide}
-    - {level: 3.44, label: Nankai Trough tsunami, Hiroshima City maximum}
+  marks:                   # local levels for the slider, m above today's mean sea level (docs/datum.md); label and
+                           # title (the tooltip): a string, or one per language of the page
+    - level: 1.76          # mean high water of spring tides at Hiroshima port: T.P. +1.92 m
+      label: {en: "spring high tide, twice a month", ru: "сизигийный прилив, дважды в месяц", ja: "大潮の満潮（月に2回）"}
+      title:
+        en: "Mean high water of spring tides at Hiroshima port: the high tide round every new and full moon. Sea walls keep the city dry at this level; the model does not see them."
+        ru: "Средняя полная вода сизигийных приливов в порту Хиросимы: прилив около каждого новолуния и полнолуния. При таком уровне город остаётся сухим за набережными, которых модель не видит."
+        ja: "広島港の朔望平均満潮位：新月と満月のころの満潮。この水位では防潮堤が市街地を守っていますが、モデルには防潮堤が写りません。"
+    - level: 3.44          # Hiroshima City: the highest water level of a Nankai Trough earthquake, T.P. +3.6 m
+      label: {en: "Nankai Trough tsunami", ru: "цунами Нанкайского жёлоба", ja: "南海トラフ巨大地震の津波"}
+      title:
+        en: "Hiroshima City's highest water level for a Nankai Trough earthquake: 3.6 m above T.P., of which 1.5 m is the wave"
+        ru: "Наивысший уровень воды при землетрясении в Нанкайском жёлобе по оценке города Хиросима: 3,6 м над T.P., из них 1,5 м — сама волна"
+        ja: "広島市による南海トラフ巨大地震の最高津波水位：海抜3.6 m（うち津波の高さ1.5 m）"
+
+figures:                   # figures.py: the pictures of the write-up, each at most 1024 x 768 px
+  views_at: [132.4877, 34.3666]     # lon, lat: Ogonzan, a wooded hill beside flat reclaimed land (the slide of its top)
+  views_m_per_px: 5
+  ground_at: [132.4672, 34.3900]    # the downtown (Hatchobori) and the hill of Hijiyama in one frame
+  ground_m_per_px: 5
+  flood_names:                      # the two maps' names, per language
+    1.76: {en: mean spring high tide, ru: сизигийный прилив, ja: 大潮の満潮}
+    3.44: {en: Nankai Trough maximum, ru: максимум Нанкай, ja: 南海トラフの最高水位}
+  languages: [en, ru, ja]           # fig-x.jpg in English, fig-x.ru.jpg, fig-x.ja.jpg
+  error_marks:                      # numbered on the error map: lon, lat
+    - [132.4608, 34.3936]           # 1 the downtown: roofs
+    - [132.4823, 34.3359]           # 2 a narrow wooded ridge, cut
+    - [132.4004, 34.4142]           # 3 ground raised after 2008

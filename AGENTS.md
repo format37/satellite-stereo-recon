@@ -64,6 +64,12 @@ mistakes:
 - The Copernicus check is surface against surface at 30 m: it says whether roofs and canopy are at the right height
   on average, not whether single buildings are.
 - AW3D30 is made from PRISM: it is not an independent check of a PRISM DSM.
-- The demo's data (`demo.py`) are rasters made from the scenes: they go to `product/demo/` and, for the blog, to its
-  `public/media/<name>/`, which the blog's `.gitignore` keeps out of git. Never into a post folder.
+- The demo's data (`demo.py`) and the pictures of the write-up (`figures.py`) are rasters made from the scenes: they
+  go to `product/demo/`, `product/figures/` and, for the blog, to its `public/media/<name>/`, which the blog's
+  `.gitignore` keeps out of git. Never into a post folder. No picture larger than 1024 x 768 px, each with its credit.
+- **Check what the page shows.** `floods.py` and `demo.py` both take the demo's grid from `cells.py` (cells, today's
+  water, heights rounded to the page's steps), and the reference is put on the same land cells. When they each built
+  their own, the check and the page disagreed by a square kilometre, and a ring of shore cells without a reference
+  height kept the sea out of the reference: 0.6 km² at +1.76 m where the same bathtub really floods 11.8.
+- A value of a flood curve read between two computed levels is wrong: the area grows in jumps. Compute at the level.
 - Low bundle-adjustment residuals (0.2 px) say the views agree with each other, not that the heights are right.

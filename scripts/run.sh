@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The whole way from satellite scenes to a DSM above sea level tied to a reference height model, the ground under it,
-# its check against independent elevation models, a voxel model and the data of the interactive demo, for one
-# variant YAML.
+# its check against independent elevation models, a voxel model, the data of the interactive demo and the pictures
+# of the write-up, for one variant YAML.
 #
 #   scripts/run.sh data/hiroshima/fnb_global.yaml 2>&1 | tee data/hiroshima/out/fnb_global.log
 #   FROM=dsm scripts/run.sh data/hiroshima/fb.yaml      # start at a later step (the list is STEPS below)
@@ -14,7 +14,7 @@
 set -euo pipefail
 T=$(cd "$(dirname "$0")" && pwd); Y=${1:?usage: run.sh VARIANT.yaml}
 PY=${PY:-${VIRTUAL_ENV:+$VIRTUAL_ENV/bin/python}}; PY=${PY:-python3}; export PY
-STEPS=(prepare reference masks stereo dsm anchor ground check floods voxels demo report)
+STEPS=(prepare reference masks stereo dsm anchor ground check floods voxels demo figures report)
 FROM=${FROM:-prepare}; TO=${TO:-report}; go=0; stop=0
 on() { [ $stop = 1 ] && return 1; [ "$1" = "$FROM" ] && go=1; [ "$1" = "$TO" ] && stop=1; [ $go = 1 ]; }
 for s in "$FROM" "$TO"; do [[ " ${STEPS[*]} " == *" $s "* ]] || { echo "FROM and TO must be among: ${STEPS[*]}"; exit 1; }; done
@@ -31,6 +31,7 @@ if on check;     then step check;     "$PY" -I "$T/check.py" "$Y"; fi      # 8. 
 if on floods;    then step floods;    "$PY" -I "$T/floods.py" "$Y"; fi     # 9. flood extents, high ground against the GSI DEM -> product/floods.md
 if on voxels;    then step voxels;    "$PY" -I "$T/voxels.py" "$Y"; fi     # 10. the voxel model -> product/voxels.npz (look: scripts/voxview.py)
 if on demo;      then step demo;      "$PY" -I "$T/demo.py" "$Y"; fi       # 11. the data of the interactive demo -> product/demo/
-if on report;    then step report                                          # 12. pictures, every number of the run on one page
+if on figures;   then step figures;   "$PY" -I "$T/figures.py" "$Y"; fi    # 12. the pictures of the write-up -> product/figures/
+if on report;    then step report                                          # 13. renders, every number of the run on one page
   "$PY" -I "$T/render.py" "$Y"; "$PY" -I "$T/summary.py" "$Y"; fi
 step done

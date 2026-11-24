@@ -4,8 +4,8 @@
     python3 -I scripts/demo.py data/hiroshima/fnb_global.yaml [OUTDIR]
 
 Everything on a grid of demo.cell (5 m), heights in steps of demo.zstep (0.5 m) above today's mean sea level
-(demo.msl_m above the geoid). The demo (a web page) floods the ground from the sea as the level rises and finds the
-nearest high ground for a point; it needs nothing else.
+(demo.msl_m above the geoid): the grid of cells.py, which floods.py checks against the reference. The demo (a web page)
+floods the ground from the sea as the level rises and finds the nearest high ground for a point; it needs nothing else.
 
   surface.png   the anchored DSM, the median of the cell: what is drawn (roofs, canopy, hills). 16 bit:
                 R = high byte, G = low byte of (height - z0) / zstep; B = flags: 1 sea or tidal river (where the sea
@@ -24,9 +24,9 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cells import Cells
 from geo import Grid
 from project import load
 
@@ -36,63 +36,17 @@ if not p.demo:
     sys.exit(0)
 D = p.demo
 g = Grid(p)
-cell, zstep, msl = float(D.get('cell', 5)), float(D.get('zstep', 0.5)), float(D.get('msl_m', 0.0))
-f = int(round(cell / g.res))
-hh, ww = g.height // f * f, g.width // f * f
-rows, cols = hh // f, ww // f
+C = Cells(p, g)                                             # the grid of the demo: cells.py (floods.py checks the same)
+cell, zstep, msl, rows, cols = C.cell, C.zstep, C.msl, C.rows, C.cols
+S, Gm, WC, O, z0, SEA_FLOOR = C.S, C.G, C.WC, C.O, C.z0, C.sea_floor
+water, sea, inland, measured, outside = C.water, C.sea, C.inland, C.measured, C.outside
 out = p.product / 'demo'
 out.mkdir(parents=True, exist_ok=True)
-
-
-def blocks(a):
-    return a[:hh, :ww].reshape(rows, f, cols, f).transpose(0, 2, 1, 3).reshape(rows, cols, f * f)
-
-
-def inpaint(a, holes):
-    """fill holes from their rims (Navier-Stokes), on a 0..1 scale"""
-    if not holes.any():
-        return a
-    lo, hi = np.nanmin(a), np.nanmax(a)
-    z = np.where(np.isfinite(a), (a - lo) / (hi - lo), 0).astype(np.float32)
-    return np.where(holes, cv2.inpaint(z, holes.astype(np.uint8), 3, cv2.INPAINT_NS) * (hi - lo) + lo, a)
-
-
-wat = np.nan_to_num(g.read(p.product / 'water.tif'))
-wc = np.nan_to_num(g.read(p.vref / 'worldcover.tif')).astype(np.uint8)
-wcb = blocks(wc); classes = np.unique(wc)
-WC = classes[np.argmax(np.stack([(wcb == k).sum(axis=2) for k in classes]), axis=0)].astype(np.uint8)
-# today's water: the stereo mask (water.tif) was shrunk by masks.water_shrink_m to keep the quays in the images; the
-# demo takes all of WorldCover's water, the sea being the part joined to the sea of water.tif
-sea0 = blocks((wat == 1).astype(np.float32)).mean(axis=2) > 0.5
-water = sea0 | (blocks((wat == 2).astype(np.float32)).mean(axis=2) > 0.5) | (WC == 80)
-lab_w, _ = ndimage.label(water)
-sea = np.isin(lab_w, np.setdiff1d(np.unique(lab_w[sea0]), [0]))
-inland = water & ~sea
-with np.errstate(all='ignore'):
-    S = np.nanmedian(blocks(g.read(p.product / 'dsm_anchored.tif')), axis=2) - msl
-    Gm = np.nanmedian(blocks(g.read(p.product / 'ground.tif')), axis=2) - msl
-    ortho = g.read(p.product / 'ortho.tif')
-    O = np.nanmean(blocks(np.where(ortho > 0, ortho, np.nan)), axis=2)
-measured = np.isfinite(S) & ~water
-outside = np.isnan(O)                                                   # no scene behind the cell
-S = np.where(water, np.nan, S); Gm = np.where(water, np.nan, Gm)
-S = inpaint(S, np.isnan(S) & ~water)
-Gm = inpaint(Gm, np.isnan(Gm) & ~water)
-Gm = np.minimum(Gm, S)
-# inland water (ponds): the level of its rim, so that it floods when the sea gets there; the sea: a floor below 0
-rim = ndimage.distance_transform_edt(inland, return_distances=False, return_indices=True)
-S = np.where(inland, S[tuple(rim)], S); Gm = np.where(inland, Gm[tuple(rim)], Gm)
-SEA_FLOOR = -10.0                                                        # no bathymetry: a floor for the water to stand on
-S[sea] = SEA_FLOOR; Gm[sea] = SEA_FLOOR
-O = np.where(np.isnan(O), 0, O)
-
-z0 = float(np.floor(min(np.nanmin(S), np.nanmin(Gm)) / zstep) * zstep)
-q = lambda a: np.clip(np.round((a - z0) / zstep), 0, 65535).astype(np.uint16)
 flags = (sea * 1 | inland * 2 | measured * 4 | outside * 8).astype(np.uint8)
 
 
 def png16(path, a, b):
-    v = q(a)
+    v = C.quantized(a)
     cv2.imwrite(str(path), np.dstack([b, (v & 255).astype(np.uint8), (v >> 8).astype(np.uint8)]), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
 

@@ -45,7 +45,7 @@ def load(path):
     run = proj / 'out' / path.stem
     g = lambda k: cfg.get(k) or {}
     masks, stereo, dsm, check, vox = (g(k) for k in ('masks', 'stereo', 'dsm', 'check', 'voxels'))
-    anchor, ground, demo, floods = (g(k) for k in ('anchor', 'ground', 'demo', 'floods'))
+    anchor, ground, demo, floods, figures = (g(k) for k in ('anchor', 'ground', 'demo', 'floods', 'figures'))
     pairs = [tuple(pr) for pr in cfg['pairs']]
     src = proj / 'out' / stereo['reuse'] if stereo.get('reuse') else run      # stereo.reuse: another variant's prep, ref, ba, stereo
     views = list(dict.fromkeys(v for pr in pairs for v in pr))          # in order of first use: the first is the reference
@@ -86,6 +86,7 @@ def load(path):
         dsm_reference=check.get('dsm_reference', 'copernicus'),
         floods=floods,                                # floods.py: flood extents and high ground against the check reference
         demo=demo,                                    # demo.py: the data of the interactive demo
+        figures=figures,                              # figures.py: the pictures of the write-up
         # voxels
         voxel_size=float(vox.get('size', 5)), voxel_base=float(vox.get('base', -5)), voxel_fill_m=float(vox.get('fill_m', 50)),
     )

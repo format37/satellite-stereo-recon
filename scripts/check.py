@@ -26,7 +26,9 @@ model built on the DSM would get right.
 
 The DSM tied to a reference (product/dsm_anchored.tif) is anchor.py's: anchored to Copernicus GLO-30 (global), the
 check against the GSI DEM is independent of it; anchored to the GSI DEM itself, it is the co-registration above.
-Its numbers are given apart ('anchored'), with the reference that set its level.
+Its numbers are given apart ('anchored'), with the reference that set its level, by class and by slope.
+The ground model (product/ground.tif, ground.py) is checked the same way, ground against ground: by class, on flat
+built-up land (where the DSM stands on roofs), and by slope.
 
 Writes product/check.json, check.md (the tables), check_dh.png (map of dh over the hillshade), check_hist.png.
 Runs only where check.reference names GSI layers (Japan); elsewhere anchor.json has the agreement with Copernicus.
@@ -120,6 +122,17 @@ dha = Hc_anch - gsi
 res['anchored'] = {'reference': anch['reference'], 'shift_east_m': anch['shift_east_m'], 'shift_north_m': anch['shift_north_m'],
                    'vertical_offset_m': anch['vertical_offset_m'], 'all land': table(dha), 'flat open ground': table(dha, flat_open)}
 res['anchored'].update({c: table(dha, m) for c, m in CLS.items()})
+SLOPES = ((0, 5), (5, 15), (15, 30), (30, 90))
+flat_built = CLS['built-up'] & (slope < 5)
+res['anchored']['built-up, slope under 5 deg'] = table(dha, flat_built)
+res['anchored_by_slope'] = {f'{a}-{b} deg': table(dha, (slope >= a) & (slope < b) & ~CLS['built-up']) for a, b in SLOPES}
+gf = p.product / 'ground.tif'
+if gf.exists():                                            # the ground model, on the level of the anchored DSM
+    dg = g.read(gf) + N_run - N_gsi - gsi
+    res['ground'] = {'all land': table(dg), 'flat open ground': table(dg, flat_open),
+                     'built-up, slope under 5 deg': table(dg, flat_built)}
+    res['ground'].update({c: table(dg, m) for c, m in CLS.items()})
+    res['ground_by_slope'] = {f'{a}-{b} deg': table(dg, (slope >= a) & (slope < b) & ~CLS['built-up']) for a, b in SLOPES}
 res['pairs'] = {}                                          # each pair on its own, shifted and offset like the fusion
 for pr in p.pairs:
     f = p.product / f'dsm_{"".join(pr)}.tif'
@@ -221,6 +234,12 @@ a_ = res['anchored']
 L += ['', f'## Anchored by anchor.py to {a_["reference"]}: shift {a_["shift_east_m"]:+.2f} m east, {a_["shift_north_m"]:+.2f} m north, '
           f'offset {a_["vertical_offset_m"]:+.2f} m removed (product/dsm_anchored.tif, the one the voxels and the demo use)', '', hdr]
 L += [row(k, v) for k, v in a_.items() if isinstance(v, dict)]
+L += ['', '### anchored, by slope (not built-up)', '', hdr] + [row(k, v) for k, v in res['anchored_by_slope'].items()]
+if 'ground' in res:
+    L += ['', '## The ground model (ground.py) against GSI: ground against ground, on the level of the anchored DSM', '', hdr]
+    L += [row(k, v) for k, v in res['ground'].items()]
+    L += ['', '### the ground model, by slope (not built-up)', '', hdr] + [row(k, v) for k, v in res['ground_by_slope'].items()]
+    L += ['', '## After co-registration to GSI (the tables below: the shape, shift and offset against GSI removed)']
 for sec, title in (('after_by_slope', 'by slope (not built-up)'), ('after_by_distance_to_water', 'by distance to water (open ground)'),
                    ('after_by_gsi_source', 'by GSI layer (flat open ground)'), ('after_by_pairs', 'by number of pairs (flat open ground)')):
     if sec in res:

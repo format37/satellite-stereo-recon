@@ -21,7 +21,8 @@ scenes (1B2R + RPC) ─► crops with their own RPC ─► masks: sea (WorldCove
                          (pixel origin fixed)          them over other ground) ─► bundle adjustment (one view fixed)
   ─► stereo per pair (ASP, MGM) ─► DSM per pair ─► fused ─► heights above the geoid ─► the level from Copernicus
      GLO-30 (anchor) ─► the ground under roofs and canopy ─► check against the GSI laser DEM: heights, floods, high
-     ground ─► voxels ─► the demo's data (columns of 5 m in 0.5 m steps, the ground, colours) ─► pictures, summary
+     ground ─► voxels ─► the demo's data (columns of 5 m in 0.5 m steps, the ground, colours) ─► the pictures of the
+     write-up ─► renders, summary
 ```
 
 ## What goes where
@@ -56,9 +57,10 @@ export PATH=$PATH:/path/to/StereoPipeline-3.7.0-2026-06-08-x86_64-Linux/bin     
 ln -s /path/to/ALOS_PRISM_RPCs_Hiroshima_Stereo_Triplet data/hiroshima/scenes      # the three unpacked archives
 scripts/run.sh data/hiroshima/fb.yaml 2>&1 | tee data/hiroshima/out/fb.log          # everything, ~25 min on 8 cores
 scripts/run.sh data/hiroshima/fnb.yaml 2>&1 | tee data/hiroshima/out/fnb.log        # three pairs: 30 min of stereo
-FROM=dsm scripts/run.sh data/hiroshima/fnb_w.yaml   # from a later step: prepare reference masks stereo dsm anchor ground check floods voxels demo report
+FROM=dsm scripts/run.sh data/hiroshima/fnb_w.yaml   # from a later step: prepare reference masks stereo dsm anchor ground check floods voxels demo figures report
 TO=stereo scripts/run.sh data/hiroshima/fb.yaml     # stop after a step
 python3 -I scripts/demo.py data/hiroshima/fnb_global.yaml ../blog-site/public/media/hiroshima-sea   # the demo's data, copied for the blog
+python3 -I scripts/figures.py data/hiroshima/fnb_global.yaml ../blog-site/public/media/hiroshima-sea   # the pictures of the write-up, too
 scripts/progress.sh data/hiroshima/fnb.yaml         # in a second terminal
 python3 -I scripts/compare.py data/hiroshima/fb.yaml data/hiroshima/fnb_w.yaml      # variants side by side
 python3 scripts/voxview.py data/hiroshima/fnb_w.yaml --times 2                      # the voxel model in a window
@@ -78,9 +80,10 @@ Each takes the same YAML and can be run on its own.
 | the level and position from a reference height model (`anchor.reference`: copernicus, gsi, none), Nuth & Kaab | `anchor.py` (`coreg.py`) | `product/dsm_anchored.tif`, `anchor.json` |
 | the ground under roofs and canopy: a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution; on wooded hills, the DSM itself | `ground.py` | `product/ground.tif`, `ground.json` |
 | against the GSI DEM (by land cover, slope, curvature, distance to water, pair; co-registration; the anchored DSM; low-lying land) and Copernicus (Japan only: needs `check.reference`) | `check.py` | `product/check.md`, `check.json`, `check_dh.png` |
-| the demo's two questions against the GSI DEM: where the sea goes by level (a bathtub), the running time to the nearest high ground | `floods.py` | `product/floods.md`, `floods.json`, `floods_map.png` |
+| the demo's two questions against the GSI DEM, on the demo's own grid (`cells.py`: its cells, its water, its rounded heights): where the sea goes by level (a bathtub), the running time to the nearest high ground | `floods.py` | `product/floods.md`, `floods.json`, `floods_map.png`, `floods_maps.npz` |
 | columns of cubes from the anchored DSM, the sea at 0 m | `voxels.py` (look: `voxview.py`) | `product/voxels.npz` |
-| the demo's data: surface and ground in 5 m cells and 0.5 m steps, colours, georeference, accuracy, the reference's flood curve | `demo.py` | `product/demo/` (copied where asked) |
+| the demo's data: surface and ground in 5 m cells and 0.5 m steps (`cells.py`), colours, georeference, accuracy, the reference's flood curve | `demo.py` | `product/demo/` (copied where asked) |
+| the pictures of the write-up, each at most 1024 x 768 px with its credit, once per language of `figures.languages` (fig-x.jpg, fig-x.ru.jpg, fig-x.ja.jpg; FIGURES_FONT for the lettering): the views on one map grid, the DSM against GSI, relief of DSM / ground model / GSI, the sea at two levels on model and GSI | `figures.py` | `product/figures/` (copied where asked) |
 | pictures (headless), every number on one page | `render.py`, `summary.py` | `product/renders/`, `summary.md` |
 
 Tools that take paths: `rpc.py RPC-*.txt HDR-*.txt` checks a JAXA RPC against its scene corners; `voxmesh.py` is the
@@ -103,19 +106,21 @@ the DSM, not its level.
 | `fb_map` | as fb, on the views mapprojected onto fb's own DSM, smoothed (ASP's advice for slopes) | 93.8% | -2.89 / 4.24 / 1.50 m | 3.08 / 1.49 / 5.11 m | -0.70 / 8.12 m |
 | `fnb_global` | as fnb_w, only global inputs; anchored to Copernicus GLO-30, not GSI | 99.2% | +6.45 / 7.04 / 1.46 m | 3.02 / 1.46 / 5.15 m, level -0.76 m | +8.59 / 11.36 m |
 
-The demo's questions (`fnb_global`, `floods.md`; 5 m cells, levels above today's mean sea level, a bathtub from the
-sea; the GSI laser DEM as the reference). High ground of 10 m or more, run to from the land below 3.44 m as the demo
-does it (8 km/h on the flat, slower uphill): on the ground model a 6.7 min run in the median (GSI: 6.4), within 2 min
-of GSI's time for 94% of the people and never 5 min longer, the route ending on real high ground for 99%:
+The demo's questions (`fnb_global`, `floods.md`; the demo's own 5 m cells, levels above today's mean sea level, a
+bathtub from the sea; the GSI laser DEM on the same cells as the reference; 89.4 km² of land). High ground of 10 m or
+more, run to from the land below 3.44 m as the demo does it (8 km/h on the flat, slower uphill): on the ground model
+a 6.7 min run in the median (GSI: 6.5), within 2 min of GSI's time for 88% of the people, 2 to 5 min longer for the
+other 12% (their nearest high ground by GSI is built-up slopes, which the filter flattens), the route ending on real
+high ground for 98%:
 
 | sea level | GSI DEM (ground) | DSM, anchored (roofs) | ground model (IoU with GSI) |
 |---|---|---|---|
-| 1 m | 0.2 km² | 2.0 km² | 18.7 km² (0.00) |
-| 2 m | 10.1 km² | 8.2 km² | 34.9 km² (0.25) |
-| 3.44 m (Nankai Trough tsunami, Hiroshima City's maximum) | 42.1 km² | 21.6 km² | 48.6 km² (0.81) |
-| 5 m | 49.4 km² | 32.7 km² | 51.8 km² (0.91) |
-| 10 m | 54.2 km² | 48.0 km² | 56.2 km² (0.94) |
-| 20 m | 57.8 km² | 56.0 km² | 59.3 km² (0.95) |
+| 1 m | 1.4 km² | 1.5 km² | 15.1 km² (0.06) |
+| 2 m | 15.1 km² | 5.1 km² | 30.5 km² (0.38) |
+| 3.44 m (Nankai Trough tsunami, Hiroshima City's maximum) | 41.5 km² | 19.2 km² | 46.8 km² (0.81) |
+| 5 m | 48.5 km² | 30.4 km² | 50.2 km² (0.91) |
+| 10 m | 53.0 km² | 46.5 km² | 54.9 km² (0.94) |
+| 20 m | 56.5 km² | 54.7 km² | 58.1 km² (0.96) |
 
 What the runs showed:
 
@@ -124,10 +129,11 @@ What the runs showed:
 | Does the vertical datum matter? | By 33 m: the geoid (GSIGEO2011) is 32.9-33.5 m above the ellipsoid over the box. EGM2008 is 0.19 m below it, JPGEO2024 (the 2025 datum) 0.16 m above. |
 | Do the RPCs give the level? | No. Each pair with the delivered RPCs: F-B -2.75 m, N-F +7.05 m, N-B -12.22 m on flat ground: the views disagree along track by 1.4 px (N-F) and 2.4 px (N-B). Bundle adjustment of three views makes the pairs agree (to 0.6 m) at the level of the view kept fixed: +6.1 m with N, -2.7 m with F alone. Ground control is needed; `dsm_anchored.tif` uses the GSI DEM. |
 | What does the nadir view add? | Completeness: 89.4% -> 99.2% of the land, the cloud hole of the forward view filled, the ground behind tall buildings. Not precision: the nadir pairs have half the base (NMAD 2.3-2.6 m alone); weighted fusion keeps the F-B precision. |
-| Where does it fail? | Forested hills: NMAD 1.7 m on slopes under 5 deg, 4.0 at 5-15, 7.0 at 15-30, 8.5 above 30. Not the sun (all aspects alike) but the shape: ridges come out 5 m low, valleys 14 m high (canopy and MGM smoothing); a narrow ridge (Motoujina) 30 m low. |
+| Where does it fail? | Forested hills: NMAD 1.7 m on slopes under 5 deg, 4.0 at 5-15, 7.0 at 15-30, 8.5 above 30. Not the sun (all aspects alike) but the shape: ridges come out 5 m low, valleys 14 m high (canopy and MGM smoothing); a narrow wooded ridge (the island of Kanawajima) 27 m low. |
 | Can it run without Japanese data? | Yes: `fnb_global` uses only global inputs. Anchored to Copernicus GLO-30, its level is 0.76 m below the GSI laser DEM on flat open ground; the spread is the same (NMAD 1.46 m, 95% within 5.2 m). The images give the shape, one outside model gives the level. |
-| And the ground under the roofs? | `ground.py`: on flat built-up land +0.3 m off GSI in the median (anchored to GSI). From 5 m up the flood matches GSI's with IoU 0.91-0.95; at 3.44 m 0.81. Below about 3 m it floods far more than GSI (1 m: 19 km² against 0.2): sea walls and river embankments are narrower than 2.5 m pixels, and the level is 0.76 m low. The demo shows GSI's number beside its own. |
-| And the hills? | The opening that takes the roofs off took the hills too: every hill narrower than its 210 m window and the top of the wider ones (the wooded hills of Eba, 50 and 33 m by GSI, came out at 2 m; Ogonzan, 209 m, at 134 m), so the demo sent people past a hill next to them. Over forest the stereo DSM is within ~1 m of GSI in the median (a winter scene; the matching smooths the canopy), so on wooded hills (patches rising more than 15 m above the ground round them; a garden's trees on flat land rise 11 m) the DSM is the ground: Eba 48 and 32 m, Ogonzan 207 m. Running to high ground of 10 m from the land below 3.44 m, the share of people within 2 min of GSI's time went from 76% to 94%, 5 min longer or more from 14% to 0%. |
+| And the ground under the roofs? | `ground.py`: on flat built-up land +0.3 m off GSI in the median (anchored to GSI). In `fnb_global` (anchored to Copernicus) the ground model is -0.5 m off GSI on flat built-up land (NMAD 1.2 m), where the DSM is +1.7 m (2.5 m). From 5 m up the flood matches GSI's with IoU 0.91-0.96; at 3.44 m 0.81. Below about 3 m it floods far more than GSI (1 m: 15 km² against 1.4): sea walls and river embankments are narrower than 2.5 m pixels, and the level is 0.76 m low. The demo shows GSI's number beside its own. |
+| Is the GSI bathtub right at low levels? | No. At +1.76 m, a mean spring high tide at which the city is dry, the bathtub on the GSI DEM floods 11.8 km²; the largest piece, 6.2 km², through two 5 m cells of a river bank. Thin walls and gates are not in a 5 m grid. An earlier version of the check gave 0.6 km² there: its water mask was shrunk by 10 m, and the ring of cells without a GSI height round the shore acted as a wall. The check now runs on the demo's own cells and water (`cells.py`), with the reference on the same land. |
+| And the hills? | The opening that takes the roofs off took the hills too: every hill narrower than its 210 m window and the top of the wider ones (the wooded hills of Eba, 50 and 33 m by GSI, came out at 2 m; Ogonzan, 209 m, at 134 m), so the demo sent people past a hill next to them. Over forest the stereo DSM is within ~1 m of GSI in the median (a winter scene; the matching smooths the canopy), so on wooded hills (patches rising more than 15 m above the ground round them; a garden's trees on flat land rise 11 m) the DSM is the ground: Eba 48 and 32 m, Ogonzan 207 m. Running to high ground of 10 m from the land below 3.44 m, the share of people within 2 min of GSI's time went from 81% to 88%, 5 min longer or more from 6% to 0%. Slopes with houses on them are still flattened: 2.9 km² of GSI's high ground is missing, 91% of it built-up. |
 | Is it a ground model? | No: roofs and canopy. GSI has 10.7 km² of the box's land below 1 m T.P. and 21 km² below 2 m (spring high water is +1.9 m: the inner delta lies behind sea walls); the anchored DSM has 1.9 and 5.6 km² there (IoU 0.09 and 0.18). |
 | And as a surface model? | Against Copernicus GLO-30 (TanDEM-X, 30 m), anchored: built-up median +1.05 m, RMS 3.5; open +0.58 m, RMS 2.9; trees -4.3 m, RMS 10.6. |
 | Do the usual quality settings help? | No. ASP's subpixel mode 3 instead of MGM's own: NMAD 1.77 m on flat ground instead of 1.41, worse slopes, 3x the time. Stereo on views mapprojected onto fb's own smoothed DSM: 4% more land, but NMAD 1.49 m and slopes worse (7.9 m at 15-30 deg): MGM leans on the smooth seed where the forest has little texture. |
