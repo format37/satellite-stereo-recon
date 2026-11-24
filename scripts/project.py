@@ -45,6 +45,7 @@ def load(path):
     run = proj / 'out' / path.stem
     g = lambda k: cfg.get(k) or {}
     masks, stereo, dsm, check, vox = (g(k) for k in ('masks', 'stereo', 'dsm', 'check', 'voxels'))
+    anchor, ground, demo, floods = (g(k) for k in ('anchor', 'ground', 'demo', 'floods'))
     pairs = [tuple(pr) for pr in cfg['pairs']]
     src = proj / 'out' / stereo['reuse'] if stereo.get('reuse') else run      # stereo.reuse: another variant's prep, ref, ba, stereo
     views = list(dict.fromkeys(v for pr in pairs for v in pr))          # in order of first use: the first is the reference
@@ -61,6 +62,7 @@ def load(path):
         clouds=bool(masks.get('clouds', True)), cloud_dn=masks.get('cloud_dn', 'auto'),
         cloud_min_m2=float(masks.get('cloud_min_m2', 2000)), cloud_grow_m=float(masks.get('cloud_grow_m', 60)),
         cloud_views=list(masks.get('cloud_views', list(cfg['scenes']))),
+        terrain=masks.get('terrain', 'copernicus'),   # the ground the cloud test and the hole map look from: copernicus | gsi
         # stereo (NASA Ames Stereo Pipeline)
         bundle_adjust=bool(stereo.get('bundle_adjust', True)), algorithm=stereo.get('algorithm', 'asp_mgm'),
         subpixel=int(stereo.get('subpixel', 9)), stereo_options=list(stereo.get('options') or []),
@@ -69,11 +71,20 @@ def load(path):
         ba_fixed=stereo.get('ba_fixed') or ('N' if 'N' in views else views[0]),
         mapproject=stereo.get('mapproject') or '',    # another variant: mapproject the views onto its smoothed DSM first
         # DSM
-        res=float(dsm.get('res', 2.5)), geoid=dsm.get('geoid', 'gsigeo2011'), fuse=dsm.get('fuse', 'median'),
+        res=float(dsm.get('res', 2.5)), geoid=dsm.get('geoid', 'egm2008'), fuse=dsm.get('fuse', 'median'),
         max_tri_error=float(dsm.get('max_triangulation_error', 0)), point2dem_options=list(dsm.get('point2dem_options') or []),
-        # check against an independent elevation model
-        reference=list(check.get('reference', ['dem5a', 'dem5b', 'dem5c', 'dem10b'])),
+        # the level: tie the DSM to an outside height model (anchor.py)
+        anchor=anchor.get('reference', 'copernicus'), anchor_open_margin_m=float(anchor.get('open_margin_m', 30)),
+        # the ground under roofs and canopy (ground.py)
+        ground_window_m=float(ground.get('window_m', 210)), ground_res=float(ground.get('res', 10)),
+        ground_percentiles=[float(x) for x in ground.get('percentiles', [10, 90])],
+        ground_interp_sigma_m=float(ground.get('interp_sigma_m', 300)), ground_built_up_window_m=float(ground.get('built_up_window_m', 620)),
+        ground_built_up_min=float(ground.get('built_up_min', 0.5)), ground_flat_max_deg=float(ground.get('flat_max_deg', 5)),
+        # check against an independent elevation model (GSI layers: Japan only; empty = no check)
+        reference=list(check.get('reference', [])),
         dsm_reference=check.get('dsm_reference', 'copernicus'),
+        floods=floods,                                # floods.py: flood extents and high ground against the check reference
+        demo=demo,                                    # demo.py: the data of the interactive demo
         # voxels
         voxel_size=float(vox.get('size', 5)), voxel_base=float(vox.get('base', -5)), voxel_fill_m=float(vox.get('fill_m', 50)),
     )

@@ -11,7 +11,7 @@ ground it sees at sea level (h = the geoid N, about 33 m above the ellipsoid her
 Clouds. A cloud floats a kilometre or more above the ground, so each view sees it over a different spot of ground:
 a slanted view puts it 0.5 km away from where the nadir view does for every km of height. A bright roof sits over
 the same spot in every view. So a bright blob of one view (masks.cloud_dn, area >= masks.cloud_min_m2) is a cloud
-when, at the ground behind it (GSI terrain + geoid), the other views are not bright; within 40 px (100 m) counts as
+when, at the ground behind it (masks.terrain: Copernicus GLO-30 anywhere, or the GSI DEM, + geoid), the other views are not bright; within 40 px (100 m) counts as
 "the same spot", which tolerates buildings up to about 100 m between the slanted views. Clouds are grown by
 masks.cloud_grow_m. The test needs two views; masks.cloud_views lists them (the nadir view helps even when it is in
 no pair). The ground under a cloud of one view can still be matched in another pair: that is what the nadir buys.
@@ -43,8 +43,11 @@ info = {'views': {}}
 
 N = g.read(ref / f'geoid_{p.geoid}.tif')
 n_sea = float(np.nanmean(N))                                                             # sea level above the ellipsoid
-gsi = g.read(ref / 'gsi.tif')
-terr = np.where(np.isfinite(gsi), gsi, 0.0) + np.where(np.isfinite(N), N, n_sea)          # ellipsoidal terrain, sea = geoid
+if p.terrain == 'gsi':                                                                   # T.P. heights + GSI's geoid
+    t0, Nt = g.read(ref / 'gsi.tif'), g.read(ref / 'geoid_gsigeo2011.tif')
+else:                                                                                    # Copernicus: EGM2008 heights
+    t0, Nt = g.read(ref / 'copernicus.tif'), g.read(ref / 'geoid_egm2008.tif')
+terr = np.where(np.isfinite(t0), t0, 0.0) + np.where(np.isfinite(Nt), Nt, n_sea)          # ellipsoidal terrain, sea = geoid
 terr = cv2.GaussianBlur(terr.astype(np.float32), (0, 0), 4)                              # 10 m: a surface to project onto
 terrain = lambda lon, lat: g.sample(terr, lon, lat)
 

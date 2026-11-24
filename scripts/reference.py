@@ -125,21 +125,25 @@ if __name__ == '__main__':
 
     # ---- GSI elevation tiles, in the order of preference
     H = np.full(g.shape, np.nan, np.float32); S = np.zeros(g.shape, np.uint8); info['gsi'] = {}
-    for k, name in enumerate(p.reference, 1):
+    for k, name in enumerate(p.reference, 1):                     # empty outside Japan: no GSI at all
         a, tr, got, total = gsi_layer(name, p.aoi, cache / 'gsi')
         w = g.warp_array(a, tr, 'EPSG:3857', 'bilinear')
         new = np.isnan(H) & np.isfinite(w)
         H[new] = w[new]; S[new] = k
         info['gsi'][name] = dict(tiles=got, of=total, share_of_grid=float(new.mean()))
         print(f'GSI {name}: {got}/{total} tiles, fills {new.mean():.1%} of the grid')
-    g.write(out / 'gsi.tif', H); g.write(out / 'gsi_source.tif', S, nodata=0)
-    info['gsi_range'] = [float(np.nanmin(H)), float(np.nanmax(H))]
-    print(f'GSI heights {np.nanmin(H):.1f} .. {np.nanmax(H):.1f} m (T.P.); no data on {np.isnan(H).mean():.1%} (the sea)')
+    if p.reference:
+        g.write(out / 'gsi.tif', H); g.write(out / 'gsi_source.tif', S, nodata=0)
+        info['gsi_range'] = [float(np.nanmin(H)), float(np.nanmax(H))]
+        print(f'GSI heights {np.nanmin(H):.1f} .. {np.nanmax(H):.1f} m (T.P.); no data on {np.isnan(H).mean():.1%} (the sea)')
 
     # ---- geoid models
     info['geoid'] = {}
     N = {}
+    use = {p.geoid, 'egm2008'} | ({'gsigeo2011', 'jpgeo2024'} if p.reference or p.anchor == 'gsi' or p.terrain == 'gsi' else set())
     for name, fn in GEOIDS.items():
+        if name not in use:
+            continue
         f = cache / 'geoid' / fn
         fetch(f'https://cdn.proj.org/{fn}', f)
         N[name] = g.warp(str(f), 'bilinear')
@@ -147,6 +151,8 @@ if __name__ == '__main__':
         info['geoid'][name] = dict(file=fn, min=float(np.nanmin(N[name])), max=float(np.nanmax(N[name])), mean=float(np.nanmean(N[name])))
         print(f'geoid {name}: N = {np.nanmin(N[name]):.3f} .. {np.nanmax(N[name]):.3f} m above the ellipsoid')
     for a, b in (('gsigeo2011', 'egm2008'), ('jpgeo2024', 'gsigeo2011')):
+        if a not in N or b not in N:
+            continue
         d = N[a] - N[b]
         info['geoid'][f'{a}-{b}'] = dict(min=float(np.nanmin(d)), max=float(np.nanmax(d)), mean=float(np.nanmean(d)))
         print(f'  {a} - {b}: {np.nanmean(d):+.3f} m ({np.nanmin(d):+.3f} .. {np.nanmax(d):+.3f})')

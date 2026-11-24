@@ -24,9 +24,12 @@ sun?) and by curvature (is it the shape: ridges cut, valleys filled?); the large
 Low-lying land: the area below 1, 2, 3, 5 m T.P. by the GSI DEM and by the DSM, and their overlap: what a flood
 model built on the DSM would get right.
 
-Writes product/check.json, check.md (the tables), check_dh.png (map of dh over the hillshade), check_hist.png, and
-product/dsm_anchored.tif: the DSM with the shift and the offset removed, heights above T.P. That is the DSM tied to
-ground control (the GSI DEM): the one to use for anything that needs the true level of the ground, like a flood.
+The DSM tied to a reference (product/dsm_anchored.tif) is anchor.py's: anchored to Copernicus GLO-30 (global), the
+check against the GSI DEM is independent of it; anchored to the GSI DEM itself, it is the co-registration above.
+Its numbers are given apart ('anchored'), with the reference that set its level.
+
+Writes product/check.json, check.md (the tables), check_dh.png (map of dh over the hillshade), check_hist.png.
+Runs only where check.reference names GSI layers (Japan); elsewhere anchor.json has the agreement with Copernicus.
 """
 import json
 import sys
@@ -40,10 +43,14 @@ import numpy as np
 from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from coreg import nuth_kaab
 from geo import Grid, stats
 from project import load
 
 p = load(sys.argv[1])
+if not p.reference:
+    print(f'{p.name}: no check reference (check.reference is empty): nothing to check against')
+    sys.exit(0)
 g = Grid(p)
 ref = p.vref
 H = g.read(p.product / 'dsm.tif')
@@ -87,33 +94,32 @@ dh = H_tp - gsi
 res['before'] = {'all land': table(dh), 'flat open ground': table(dh, flat_open)}
 res['before'].update({c: table(dh, m) for c, m in CLS.items()})
 
-# ---- Nuth & Kaab: horizontal shift on slopes, then the vertical offset on flat open ground
-sx = sy = 0.0
+# ---- Nuth & Kaab: horizontal shift on slopes, then the vertical offset on flat open ground (coreg.py)
 sel0 = land & ~CLS['built-up'] & (slope > 5) & (slope < 45) & np.isfinite(gsi)
-for it in range(6):
-    d = shifted(H_tp, sx, sy) - gsi if it else dh
-    m = sel0 & np.isfinite(d)
-    med = np.median(d[m]); nm = 1.4826 * np.median(np.abs(d[m] - med))
-    m &= np.abs(d - med) < 3 * nm
-    y = d[m] / np.tan(np.radians(slope[m])); ps = np.radians(aspect[m])
-    keep = np.abs(y - np.median(y)) < 5 * 1.4826 * np.median(np.abs(y - np.median(y)))
-    A = np.c_[np.cos(ps[keep]), np.sin(ps[keep]), np.ones(keep.sum())]
-    a_, b_, c_ = np.linalg.lstsq(A, y[keep], rcond=None)[0]
-    sx, sy = sx + b_, sy + a_
-    if np.hypot(a_, b_) < 0.05:
-        break
+sx, sy, n_it = nuth_kaab(H_tp, gsi, sel0, slope, aspect, g.res)
+it = n_it - 1
 d = shifted(H_tp, sx, sy) - gsi
 bias = float(np.median(d[land & flat_open & np.isfinite(d)]))
 res['coregistration'] = dict(method='Nuth & Kaab 2011 on non-built-up land, slope 5-45 deg; offset = median dh on flat open ground',
                              shift_east_m=float(sx), shift_north_m=float(sy), shift_m=float(np.hypot(sx, sy)),
                              vertical_offset_m=bias, iterations=it + 1, cells=int(sel0.sum()))
 dh2 = d - bias
-# the DSM anchored to the reference: shift and offset applied (heights above T.P.). Without ground control a PRISM
-# DSM's level is only as good as the RPCs: the three delivered here disagree by up to 2.4 px along track.
-Hc_anch = (shifted(H_tp, sx, sy) - bias).astype(np.float32)
-g.write(p.product / 'dsm_anchored.tif', Hc_anch)
 res['after'] = {'all land': table(dh2), 'flat open ground': table(dh2, flat_open)}
 res['after'].update({c: table(dh2, m) for c, m in CLS.items()})
+# the DSM as anchor.py tied it to its reference (heights above T.P. here). Without ground control a PRISM DSM's level
+# is only as good as the RPCs: the three delivered for Hiroshima disagree by up to 2.4 px along track.
+af = p.product / 'anchor.json'
+if af.exists():
+    anch = json.load(open(af))
+    Hc_anch = g.read(p.product / 'dsm_anchored.tif') + N_run - N_gsi
+else:                                                      # older runs: anchored here, to the GSI DEM
+    anch = dict(reference='gsi (check.py)', shift_east_m=float(sx), shift_north_m=float(sy), vertical_offset_m=bias)
+    Hc_anch = (shifted(H_tp, sx, sy) - bias).astype(np.float32)
+    g.write(p.product / 'dsm_anchored.tif', (Hc_anch - N_run + N_gsi).astype(np.float32))
+dha = Hc_anch - gsi
+res['anchored'] = {'reference': anch['reference'], 'shift_east_m': anch['shift_east_m'], 'shift_north_m': anch['shift_north_m'],
+                   'vertical_offset_m': anch['vertical_offset_m'], 'all land': table(dha), 'flat open ground': table(dha, flat_open)}
+res['anchored'].update({c: table(dha, m) for c, m in CLS.items()})
 res['pairs'] = {}                                          # each pair on its own, shifted and offset like the fusion
 for pr in p.pairs:
     f = p.product / f'dsm_{"".join(pr)}.tif'
@@ -161,13 +167,15 @@ res['trees_steep_by_curvature'] = {nm: table(dh2, steep & (lap >= a) & (lap <= b
 # ---- low-lying land: what a flood model would see. Area of land below a height, by the GSI DEM (bare ground) and by
 # the DSM (roofs and canopy included) as produced and after co-registration; overlap of the DSM's area with GSI's.
 Hc = shifted(H_tp, sx, sy) - bias
-both = land & np.isfinite(gsi) & np.isfinite(Hc) & np.isfinite(H_tp)
+both = land & np.isfinite(gsi) & np.isfinite(Hc) & np.isfinite(H_tp) & np.isfinite(Hc_anch)
 res['low_land'] = {}
 for t in (1, 2, 3, 5):
-    a, b, c2 = both & (gsi < t), both & (H_tp < t), both & (Hc < t)
+    a, b, c2, c3 = both & (gsi < t), both & (H_tp < t), both & (Hc < t), both & (Hc_anch < t)
     res['low_land'][f'below {t} m'] = dict(
         gsi_km2=float(a.sum() * g.res ** 2 / 1e6), dsm_km2=float(b.sum() * g.res ** 2 / 1e6), dsm_coreg_km2=float(c2.sum() * g.res ** 2 / 1e6),
+        dsm_anchored_km2=float(c3.sum() * g.res ** 2 / 1e6),
         iou=float((a & b).sum() / max((a | b).sum(), 1)), iou_coreg=float((a & c2).sum() / max((a | c2).sum(), 1)),
+        iou_anchored=float((a & c3).sum() / max((a | c3).sum(), 1)),
         gsi_low_also_low_in_dsm_coreg=float((a & c2).sum() / max(a.sum(), 1)))
 
 # ---- where it fails: the largest areas that differ from their class by more than 10 m
@@ -209,6 +217,10 @@ c = res['coregistration']
 L += ['', f'## After co-registration: shift {c["shift_east_m"]:+.2f} m east, {c["shift_north_m"]:+.2f} m north '
           f'({c["shift_m"]:.2f} m), offset {c["vertical_offset_m"]:+.2f} m removed', '', hdr]
 L += [row(k, v) for k, v in res['after'].items()]
+a_ = res['anchored']
+L += ['', f'## Anchored by anchor.py to {a_["reference"]}: shift {a_["shift_east_m"]:+.2f} m east, {a_["shift_north_m"]:+.2f} m north, '
+          f'offset {a_["vertical_offset_m"]:+.2f} m removed (product/dsm_anchored.tif, the one the voxels and the demo use)', '', hdr]
+L += [row(k, v) for k, v in a_.items() if isinstance(v, dict)]
 for sec, title in (('after_by_slope', 'by slope (not built-up)'), ('after_by_distance_to_water', 'by distance to water (open ground)'),
                    ('after_by_gsi_source', 'by GSI layer (flat open ground)'), ('after_by_pairs', 'by number of pairs (flat open ground)')):
     if sec in res:
@@ -227,7 +239,7 @@ L += [f'| {k} | {v["gsi_km2"]:.2f} | {v["dsm_km2"]:.2f} | {v["dsm_coreg_km2"]:.2
       f'{v["gsi_low_also_low_in_dsm_coreg"]:.0%} |' for k, v in res['low_land'].items()]
 L += ['', '## Copernicus GLO-30 (surface model), both at 30 m, no co-registration', '', hdr]
 L += [row(k, v, (B * g.res) ** 2) for k, v in res['copernicus_30m'].items()]
-L += ['', '## Copernicus GLO-30, both at 30 m, our DSM anchored to the GSI DEM (shape against shape)', '', hdr]
+L += ['', f'## Copernicus GLO-30, both at 30 m, our DSM anchored (to {a_["reference"]})', '', hdr]
 L += [row(k, v, (B * g.res) ** 2) for k, v in res['copernicus_30m_anchored'].items()]
 L += ['', f'## Largest areas off their class by more than 10 m ({res["bad_share_of_land"]:.1%} of the land)', '',
       '| lat | lon | ha | median dh | cover | slope | to water, m |', '|---|---|---|---|---|---|---|']

@@ -28,8 +28,15 @@ mistakes:
 - **The RPCs alone do not give the level.** The three delivered RPCs of Hiroshima disagree along track by 1.4 px (N
   against F) and 2.4 px (N against B): each pair alone is off by -2.8 m (F-B), +7.1 m (N-F), -12.2 m (N-B) on flat
   ground. Two views cannot see this (it becomes height); three views can, and bundle adjustment makes the pairs agree,
-  but at the level of the fixed view (N: +6 m; F: -2.7 m). Only ground control sets the level: `check.py` writes
-  `product/dsm_anchored.tif` (tied to the GSI DEM) and `voxels.py` uses it. Report "as produced" and "anchored" apart.
+  but at the level of the fixed view (N: +6 m; F: -2.7 m). Only an outside height model sets the level: `anchor.py`
+  writes `product/dsm_anchored.tif`, tied to `anchor.reference` (copernicus by default: global, so the method works
+  anywhere; gsi for the older Hiroshima variants), and everything after it (ground, voxels, demo) uses it. Report "as
+  produced" and "anchored" apart, and say which reference anchored it: anchored to Copernicus, Hiroshima's level is
+  0.76 m below the GSI laser DEM; anchored to GSI, the check against GSI is not independent.
+- **A DSM is not the ground.** Roofs and canopy stand in it. `ground.py` makes a ground model from the DSM itself
+  (a robust opening; under dense built-up land, the open ground seen nearby spread by normalized convolution). Floods
+  and high ground use it, never the DSM. Sea walls and river embankments are narrower than the pixels: below about
+  5 m (the 95% error) a bathtub on it floods land that the walls protect; `floods.py` shows by how much.
 - **Clouds float.** A cloud is over different ground in every view; `masks.py` finds them so. A cloud in one view
   leaves a hole in that view's pairs only: another pair may fill it.
 
@@ -52,4 +59,6 @@ mistakes:
 - The Copernicus check is surface against surface at 30 m: it says whether roofs and canopy are at the right height
   on average, not whether single buildings are.
 - AW3D30 is made from PRISM: it is not an independent check of a PRISM DSM.
+- The demo's data (`demo.py`) are rasters made from the scenes: they go to `product/demo/` and, for the blog, to its
+  `public/media/<name>/`, which the blog's `.gitignore` keeps out of git. Never into a post folder.
 - Low bundle-adjustment residuals (0.2 px) say the views agree with each other, not that the heights are right.

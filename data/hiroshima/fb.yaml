@@ -24,6 +24,7 @@ masks:
   cloud_min_m2: 2000       # smaller bright blobs are not clouds
   cloud_grow_m: 60         # the mask is grown by this much: thin edges, and the cloud's own shadow is not masked
   cloud_views: [F, N, B]   # views compared for the cloud test (the nadir view helps even when it is not in a pair)
+  terrain: gsi             # the ground the cloud test looks from: gsi (Japan) | copernicus (anywhere, the default)
 
 stereo:                    # NASA Ames Stereo Pipeline (parallel_stereo -t rpc)
   bundle_adjust: true      # adjust the RPCs of the views of this YAML to each other first (rotation + translation each)
@@ -40,6 +41,20 @@ dsm:
   max_triangulation_error: 0      # m; 0 = ASP's default (keep every point)
   point2dem_options: []
 
+anchor:                    # the level: the DSM tied to an outside height model by a shift and an offset (anchor.py)
+  reference: gsi           # gsi: the GSI DEM itself (Japan only; then the check below is not independent of it);
+                           # copernicus: Copernicus GLO-30, global (fnb_global.yaml); none: the RPCs' level
+
+ground:                    # the ground under roofs and canopy, from the DSM itself (ground.py)
+  window_m: 210            # wider than any building
+  res: 10                  # m, the grid it is computed on
+  percentiles: [10, 90]    # a robust opening: low percentile (the ground between buildings), then high (the hills back)
+  interp_sigma_m: 300      # under dense built-up land, where the DSM sees no street: the open ground seen nearby
+                           # (parks, banks, fields), spread by a Gaussian of this size; 0 = the opening only
+  built_up_window_m: 620   # ... where the land within this window is mostly built-up
+  built_up_min: 0.5        # (this share of WorldCover built-up)
+  flat_max_deg: 5          # ... and flat (hills keep the opening)
+
 check:                     # the DSM against independent elevation models
   reference: [dem5a, dem5b, dem5c, dem10b]   # GSI elevation tiles, the first that has the cell: DEM5A (airborne laser,
                                              # 5 m, bare ground), DEM5B/5C (photogrammetry, 5 m), DEM10B (10 m)
@@ -49,4 +64,4 @@ voxels:
   size: 5                  # m, the cubes
   base: -5                 # m above sea level: the bottom of the model
   fill_m: 400              # holes in the DSM up to this size are filled from their rims and flagged (source 1); wider ones stay open
-  anchored: true           # build from product/dsm_anchored.tif (tied to the GSI DEM by check.py); false = the DSM as produced
+  anchored: true           # build from product/dsm_anchored.tif (anchor.py); false = the DSM as produced

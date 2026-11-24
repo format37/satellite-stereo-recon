@@ -53,8 +53,8 @@ ln -s /path/to/ALOS_PRISM_RPCs_Hiroshima_Stereo_Triplet data/hiroshima/scenes
 | GSI elevation tiles DEM5A / DEM5B / DEM5C (5 m) and DEM10B (10 m), heights above T.P. | the accuracy check | 国土地理院 (Geospatial Information Authority of Japan), 地理院タイル 標高タイル, <https://maps.gsi.go.jp/development/ichiran.html>; GSI content terms (attribution, compatible with CC BY 4.0): 出典：国土地理院 |
 | GSIGEO2011 (`jp_gsi_gsigeo2011.tif`), JPGEO2024 (`jp_gsi_jpgeo2024.tif`) | heights above T.P. | GSI's geoid models via PROJ-data, <https://cdn.proj.org> |
 | EGM2008 2.5' (`us_nga_egm08_25.tif`) | the global geoid, for comparison | NGA, via PROJ-data |
-| ESA WorldCover 2021 v200, 10 m | water mask; land-cover classes of the check | <https://esa-worldcover.org>, CC BY 4.0, (c) ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium |
-| Copernicus DEM GLO-30 | a second check, surface against surface | (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. Read from the AWS open data bucket `copernicus-dem-30m` |
+| ESA WorldCover 2021 v200, 10 m | water mask; land-cover classes of the check, the anchor and the ground model | <https://esa-worldcover.org>, CC BY 4.0, (c) ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium |
+| Copernicus DEM GLO-30 | the level of the DSM (`anchor.py`, the default anchor: global); a second check, surface against surface | (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. Read from the AWS open data bucket `copernicus-dem-30m` |
 
 None of them comes from the PRISM scenes. Note that JAXA's own AW3D30 is made from PRISM, so it would not be an
 independent check of a PRISM DSM in the same way; the GSI DEM (airborne laser) is.

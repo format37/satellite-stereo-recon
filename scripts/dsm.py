@@ -92,8 +92,9 @@ g.write(p.product / 'dsm_count.tif', cnt, nodata=255, dtype='uint8')
 holes = np.zeros(g.shape, np.uint8)
 holes[water] = 1
 cloudy = np.zeros(g.shape, bool)
-gsi = g.read(ref / 'gsi.tif')
-terr = np.where(np.isfinite(h), h, np.where(np.isfinite(gsi), gsi + N, N))         # where to look from, ellipsoidal
+t0 = g.read(ref / 'gsi.tif') + g.read(ref / 'geoid_gsigeo2011.tif') if p.terrain == 'gsi' else \
+    g.read(ref / 'copernicus.tif') + g.read(ref / 'geoid_egm2008.tif')             # ellipsoidal
+terr = np.where(np.isfinite(h), h, np.where(np.isfinite(t0), t0, N))                # where to look from, ellipsoidal
 st = 4                                                                              # 10 m is enough for this
 lon, lat = g.lonlat(st)
 ts = terr[::st, ::st]

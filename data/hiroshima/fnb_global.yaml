@@ -1,0 +1,31 @@
+# hiroshima, variant "fnb_global": the three pairs, weighted like fnb_w, with nothing among the inputs that exists
+# only in Japan: heights above the EGM2008 geoid, the level from Copernicus GLO-30 (global), the cloud test over
+# Copernicus, the water from WorldCover. The GSI laser DEM only checks the result. The variant of the demo.
+#   scripts/run.sh data/hiroshima/fnb_global.yaml 2>&1 | tee data/hiroshima/out/fnb_global.log
+base: fnb_w.yaml
+masks:
+  terrain: copernicus
+stereo:
+  reuse: ''                # its own stereo: the cloud masks are made over another terrain
+dsm:
+  geoid: egm2008
+anchor:
+  reference: copernicus
+  open_margin_m: 30        # the offset only from open ground at least this far from anything else (30 m cells)
+
+floods:                    # floods.py: flood extents and high ground of the models against the GSI DEM
+  levels: [1, 2, 3.44, 5, 10, 20, 50]   # m above today's mean sea level (demo.msl_m above the geoid)
+  high_ground_m: 10        # high ground for the test: at least this high, in pieces of demo.refuge_min_ha
+  map_level: 3.44          # the level of the map
+
+demo:                      # demo.py: the data of the interactive demo (the post on latentstate.dev)
+  name: Hiroshima
+  cell: 5                  # m, the columns of the 3D model
+  zstep: 0.5               # m, heights in steps of this
+  msl_m: 0.35              # today's mean sea level above the geoid: Hiroshima port T.P. +0.16 m, T.P. = EGM2008 +0.19 m
+  margin_m: 5              # safe ground = water + this: the 95% error of the DSM on flat open ground (check.md)
+  speed_kmh: 8             # running, not an athlete, on the flat; slower uphill (Tobler)
+  refuge_min_ha: 1         # high ground counts in pieces at least this big
+  marks:                   # local levels for the slider, m above today's mean sea level (docs/datum.md)
+    - {level: 1.76, label: spring high tide}
+    - {level: 3.44, label: Nankai Trough tsunami, Hiroshima City maximum}
